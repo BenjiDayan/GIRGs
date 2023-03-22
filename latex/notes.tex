@@ -1,0 +1,61 @@
+\documentclass[a4paper]{article}
+
+
+% I have no idea but the following lines seem necessary to get the header to work wtf?
+% \def\nextra
+% \def\nisofficial
+
+\def\npart {II}
+\def\nterm {Michaelmas}
+\def\nyear {2016}
+\def\nlecturer {J.\ Miller}
+\def\ncourse {Probability and Measure}
+
+\newcommand{\ntoinf}{n \to \infty}
+\newcommand{\ntoisr}[1]{\stackrel{\ntoinf}{#1}}
+
+\input{header}
+
+\title{GIRGs thesis - Benjamin Dayan - Marc \& Ulysse }
+\author{Benjamin Dayan - bdayan@student.ethz.ch}
+\date{\today}
+
+\begin{document}
+
+{\let\clearpage\relax \maketitle}
+{\let\clearpage\relax \tableofcontents} 
+
+% \tableofcontents
+%\setcounter{section}{-1}
+\section{Erdos Renyi Random Graphs}
+$G_{n,p}$ has uniform iid edge probability of $p$.
+
+\textbf{Expected Degree} is $(n-1)p$, and $\deg(v) \sim \binomial(n-1, p)$.
+
+If we fix $p = \mu/n$ s.t. $E[\deg(v)] \stackrel{n \to \infty}{\to} \mu$,
+then $\deg(v) \stackrel{n \to \infty}{\sim} \Poisson(\mu)$
+
+\subsection{Galton-Watson Branching process}
+GWBP with offspring dist. $\D \in \N_0$ generates a random rooted tree $T$ where every vertex independently has 
+$\D$ children, e.g. $\D = \Poisson(\mu)$.
+
+\begin{comment}
+Question on Thm 2.3: Why cannot we just show that for any given vertex $u$, denoting $C_u$ as its connected
+component, that $P(|C_u| = s) \ntoisr{\to} P(|T| = s)$?
+
+Answer: Yes it was immediately in the next lines of the notes :P
+\end{comment}
+\begin{thm}[2.3 - connected component structure like GWBP trees]
+This is a weird statement. We show it precisely by showing that
+$P(|C_u| = s) \ntoisr{\to} P(|T| = s)$, for any node $u \in V$.
+This we do by coupling the connected component produced (as a BFS)
+with the GWBP (only concentrating on outgoing edges (to non-visited nodes)).
+
+Further with any connected component (e.g. of 5 nodes) produced as such,
+it has $\to 0$ probability of containing any additional cyclic edges (ignored in the GWBP).
+This corroborates e.g. $E[\# \text{triangles}] = \Theta(n^3 p^3)$ is constant.
+\end{thm}
+
+Ok
+
+\end{document}
