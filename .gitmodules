@@ -1,0 +1,9 @@
+[submodule "nemo-eva"]
+	path = nemo-eva
+	url = ./nemo-eva
+[submodule "Jupyter-on-Euler-or-Leonhard-Open"]
+	path = Jupyter-on-Euler-or-Leonhard-Open
+	url = ./Jupyter-on-Euler-or-Leonhard-Open
+[submodule "girg-sampling"]
+	path = girg-sampling
+	url = ./girg-sampling
