@@ -162,6 +162,129 @@ def fit_girg_alpha(g_true: nk.Graph, d, tau, num_edges=6000):
         t += 1
 
 
+# This is a simple way to fit alpha
+def fit_girg_general(g_true: nk.Graph, d, tau, num_edges=6000):
+    """Iteratively improves on an initial guess for alpha,
+    fitting to a metric (currently median of percent lower
+    common nhbs)
+    """
+    n = g_true.numberOfNodes()
+    alpha = 2.0
+
+    dd = sorted(nk.centrality.DegreeCentrality(g_true).run().scores(), reverse=True)
+    desired_degree = np.mean(dd)
+
+    weights = girgs.generateWeights(n, tau)
+    pts = girgs.generatePositions(n, d)
+
+    percs_true = get_perc_lower_common_nhbs(g_true, num_edges)
+    percs_true_median = np.median(percs_true)
+    print(f'percs_true_median: {percs_true_median}')
+
+    t = 0
+    k = 0.1
+    l = 0.3
+
+    for i in range(10):
+        print(i)
+        scale = girgs.scaleWeights(weights, desired_degree, d, alpha)
+        weights = list(np.array(weights) * scale)
+        edges = girgs.generateEdges(weights, pts, alpha)
+        g = nk.nxadapter.nx2nk(nx.from_edgelist(edges))
+        percs = get_perc_lower_common_nhbs(g, num_edges)
+        percs_median = np.median(percs)
+        print(f'alpha: {alpha:.3f}, percs_median: {percs_median:.3f}')
+        
+        scaly_thing = l*np.exp(-k * t)
+        print(f'scaly_thing: {scaly_thing}')
+
+        if percs_median > percs_true_median:     
+            alpha = 1 + (alpha - 1) * (1 - scaly_thing)
+        else:
+            alpha = 1 + (alpha - 1) * (1 - scaly_thing)**(-1)
+            
+        t += 1
+
+def scale_param(param, scale, base, larger=True):
+    if larger:
+        return base + (param - base) * (1 - scale)**(-1)
+    else:
+        return base + (param - base) * (1 - scale)
+    
+
+class GirgFitter:
+    def __init__(self):
+        self.t = 0
+        self.temp_scalers = [0.1]
+        self.scalers = [0.3]
+
+    def gen_new_girg(self):
+        new_girg = None
+        return new_girg
+
+    def step(self):
+        girg = self.gen_new_girg()
+        # do some decisions
+        ...
+        self.t += 1
+    
+    def step_n(self, n):
+        for i in range(n):
+            self.step()
+
+
+class AirportGirgFitter(GirgFitter):
+    n = 10317
+    d = 2
+    tau = 2.103
+    num_edges = 6000
+    def __init__(self, weights, dists, g_true):
+        self.t = 0
+        self.temp_scalers = np.array([0.1, 0.1])
+        self.scalers = np.array([0.3, 0.3])
+        self.alpha = 1.3
+        self.const = 1/600
+
+        self.weights = weights # n vector of weights
+        self.dists = dists  # nxn matrix of distances
+        self.g_true = g_true
+
+        percs = get_perc_lower_common_nhbs(g_true, self.num_edges*10)
+        self.percs_true_median = np.median(percs)
+        self.avg_degree_true = avg_degree(g_true)
+        print(f'percs_true_median: {self.percs_true_median}, avg_degree_true: {self.avg_degree_true}')
+
+    def gen_new_girg(self):
+        outer = np.outer(self.weights, self.weights)
+        p_uv = np.divide(outer, self.dists**d)
+        p_uv = self.const * np.power(p_uv, self.alpha)
+        p_uv = np.minimum(p_uv, 1)
+        unif_mat = np.random.uniform(size=p_uv.shape)
+        edges = np.triu((unif_mat < p_uv).astype(np.uint), 1)
+        g_girg = nk.nxadapter.nx2nk(nx.from_numpy_array(edges))
+    
+        return g_girg
+    
+    def step(self):
+        g_girg = self.gen_new_girg()
+        # do some decisions
+        percs = get_perc_lower_common_nhbs(g_girg, self.num_edges)
+        percs_median = np.median(percs)
+        girg_avg_degree = avg_degree(g_girg)
+        print(f'percs_median: {percs_median:.3f}, girg_avg_degree: {girg_avg_degree:.3f}')
+
+        scaly_thing = self.scalers * np.exp(-self.temp_scalers * self.t)
+        print(f'scaly_thing: {scaly_thing}')
+
+        larger = percs_median < self.percs_true_median
+        self.alpha = scale_param(self.alpha, scaly_thing[0], 1, larger)
+        larger = self.avg_degree_true > girg_avg_degree
+        self.const = scale_param(self.const, scaly_thing[1], 0, larger)
+
+        print(f'alpha: {self.alpha:.3f}, const: {self.const:.4e}')
+        self.t += 1
+
+
 
 def expected_node_weight_func(n, tau, alpha, d):
     w_mean = (tau-1)/(tau-2)

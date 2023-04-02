@@ -22,7 +22,7 @@ def plot_degree_dist(g: Graph, pl_fit=False, vlines=0):
     plt.yscale("log")
     plt.ylabel("number of nodes")
     # plt.scatter(degrees, numberOfNodes, s=1.1, marker='x')
-    plt.plot(degrees, numberOfNodes)
+    plt.scatter(degrees, numberOfNodes)
     if pl_fit:
         fit = powerlaw.Fit(dd, discrete=True)
         print(f'powerlaw alpha: {fit.power_law.alpha:.3f}')
