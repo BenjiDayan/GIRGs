@@ -180,7 +180,7 @@ def generate_GIRG(n=1000, d=3, tau=2.2, alpha=2.0):
     edges = generateEdges(weights, pts, alpha)
     return edges, weights, pts
 
-
+ 
 def generate_GIRG_nk(n, d, tau, alpha):
     edges, weights, pts = generate_GIRG(n, d, tau, alpha)
     # nx.from_numpy_matrix goes from an adjacency matrix. It actually
@@ -191,16 +191,30 @@ def generate_GIRG_nk(n, d, tau, alpha):
 
 
 
-def cgirg_gen(n, d, tau, alpha, desireAvgDegree=None):
+
+def cgirg_gen(n, d, tau, alpha, desiredAvgDegree=None):
     """Generate a GIRG with C-library"""
     weights = girgs.generateWeights(n, tau)
-    if desireAvgDegree is not None:
-        weights = list(np.array(weights) * girgs.scaleWeights(weights, desireAvgDegree, d, alpha))
+    scaled_weights = weights
+    const = 1
+    if desiredAvgDegree is not None:
+        const = girgs.scaleWeights(weights, desiredAvgDegree, d, alpha)
+        scaled_weights = list(np.array(weights) * const)
     pts = girgs.generatePositions(n, d)
-    edges = girgs.generateEdges(weights, pts, alpha)
+    edges = girgs.generateEdges(scaled_weights, pts, alpha)
     # Make graph from edge list (not adjacency matrix)
-    g = nk.nxadapter.nx2nk(nx.from_edgelist(edges))
-    return g, edges, weights, pts
+    gnx = nx.from_edgelist(edges)
+    missing_nodes = set(list(range(n)))
+    for node in gnx.nodes:
+        missing_nodes.remove(node)
+    
+    for missing_node in missing_nodes:
+        gnx.add_node(missing_node)
+
+    gnk = nk.nxadapter.nx2nk(gnx)
+    id2gnk = dict((gnx_id, gnk_id) for (gnx_id, gnk_id) in zip(gnx.nodes(), range(gnx.number_of_nodes())))
+
+    return gnk, edges, weights, pts, const, id2gnk
 
 
 # sample_edge_stuff but with knowledge of the graph?
