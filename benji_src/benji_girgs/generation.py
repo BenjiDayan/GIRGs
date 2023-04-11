@@ -40,6 +40,8 @@ def torus_uniform(d: int=2, n: int=1000):
     torus_side_length = n**(1/d)
     return np.random.uniform(high=torus_side_length, size=(n, d))
 
+
+
     
 # very slow non vectorised
 def get_dists_old(torus_points: np.ndarray, torus_side_length):
@@ -78,6 +80,9 @@ def get_dists_julia(torus_points: np.ndarray, torus_side_length):
     # same eltype as torus_points
     return jl.get_dists_novars(torus_points, torus_side_length)
 
+def get_dists_cube(points: np.ndarray):
+    return np.linalg.norm(points[:, None, :] - points[None, :, :], ord=np.inf, axis=-1)
+
 
 def get_torus_path(a, b, torus_side_length):
     """Returns "b - a" in minimal torus path"""
@@ -103,7 +108,7 @@ def generatePositions(
     return torus_uniform(dimension, n)
 
 
-def get_probs(weights: List[float], pts: np.ndarray, alpha=2.0):
+def get_probs(weights: List[float], pts: np.ndarray, alpha=2.0, const=1.0):
     """
     Computes min(1, w_u w_v / ||x_u - x_v||_inf^d)^alpha
     as a big n x n square matrix (we only need upper triangular bit tho)
@@ -112,8 +117,8 @@ def get_probs(weights: List[float], pts: np.ndarray, alpha=2.0):
     n, d = pts.shape
     dists = get_dists_julia(pts, n**(1/d))
     p_uv = np.divide(outer, dists**d)  
-    p_uv = np.minimum(p_uv, 1)
     p_uv = np.power(p_uv, alpha)
+    p_uv = np.minimum(const * p_uv, 1)
     return p_uv
 
 
@@ -160,10 +165,11 @@ def generateEdges(
     positions: List[List[float]],
     alpha: float,
     *,
+    const: float = 1.0,
     seed: int = None,
 ) -> List[Tuple[int, int]]:
     np.random.seed(quick_seed(seed))
-    probs = get_probs(weights, positions, alpha)
+    probs = get_probs(weights, positions, alpha, const)
     unif_mat = np.random.uniform(size=probs.shape)
     # upper triangular matrix - lower half and the diagonal zeroed
     # Since we want only one coin flip per (i, j) edge not two different
@@ -176,9 +182,8 @@ def generate_GIRG(n=1000, d=3, tau=2.2, alpha=2.0, const=1.0):
     """Generate a GIRG of n vertices, with power law exponent tau, dimesion d
     and alpha """
     weights = generateWeights(n, tau)
-    weights = const * weights
     pts = generatePositions(n, d)
-    edges = generateEdges(weights, pts, alpha)
+    edges = generateEdges(weights, pts, alpha, const)
     return edges, weights, pts
 
  
