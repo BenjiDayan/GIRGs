@@ -172,17 +172,18 @@ def generateEdges(
     
 
 #@profile
-def generate_GIRG(n=1000, d=3, tau=2.2, alpha=2.0):
+def generate_GIRG(n=1000, d=3, tau=2.2, alpha=2.0, const=1.0):
     """Generate a GIRG of n vertices, with power law exponent tau, dimesion d
     and alpha """
     weights = generateWeights(n, tau)
+    weights = const * weights
     pts = generatePositions(n, d)
     edges = generateEdges(weights, pts, alpha)
     return edges, weights, pts
 
  
-def generate_GIRG_nk(n, d, tau, alpha):
-    edges, weights, pts = generate_GIRG(n, d, tau, alpha)
+def generate_GIRG_nk(n, d, tau, alpha, const=1.0):
+    edges, weights, pts = generate_GIRG(n, d, tau, alpha, const)
     # nx.from_numpy_matrix goes from an adjacency matrix. It actually
     # works fine from an upper triangular matrix (with zeros on the diagonal)
     # so all good!
