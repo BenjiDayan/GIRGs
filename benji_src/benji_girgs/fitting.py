@@ -176,6 +176,8 @@ class GirgConstFitter(GirgFitter):
     def __init__(self, target_avg_degree, girg_gen_func):
         self.t = 0
         self.scale = 0.3
+        self.scale_up = 1.1
+        self.scale_down = 0.5
         self.target_avg_degree = target_avg_degree
         self.girg_gen_func = girg_gen_func
         self.overshoot = True
@@ -200,7 +202,7 @@ class GirgConstFitter(GirgFitter):
         # larger2 = mu2 < self.target_avg_degree
         # self.mu = mu2
         self.overshoot = (larger != self.larger)
-        self.scale *= (0.7 if self.overshoot else (1/0.7))
+        self.scale *= (self.scale_down if self.overshoot else self.scale_up)
         self.scale = min(self.scale, 0.9)
 
         if self.verbose:
@@ -214,6 +216,107 @@ class GirgConstFitter(GirgFitter):
         """Steps until the average degree is within 3% of the target average degree"""
         while abs(self.mu - self.target_avg_degree) / self.target_avg_degree > 0.03:
             self.step()
+
+
+class GirgMetricFitter(GirgFitter):
+    def __init__(self, target_metric, girg_gen_func, metric_func, metric_name='avgdeg', init_param=1.0, param_base=0.0, param_name='const'):
+        self.t = 0
+        self.scale = 0.3
+        self.scale_up = 1.1
+        self.scale_down = 0.5
+        self.target_metric = target_metric
+        self.girg_gen_func = girg_gen_func
+        self.overshoot = True
+        self.verbose=False
+        self.param = init_param
+        self.param_base = param_base
+        self.param_name = param_name
+
+        self.metric_func = metric_func
+        self.metric_name = metric_name
+
+        girg = self.girg_gen_func(self.param)
+        self.metric = metric_func(girg)
+        # avg degree too small -> need to make const larger
+        self.larger = self.metric < self.target_metric
+
+        self.hist = [(self.param, self.metric)]
+
+    def step(self):
+        self.param = scale_param(self.param, self.scale, self.param_base, self.larger)
+
+        girg = self.girg_gen_func(self.param)
+        metric = self.metric_func(girg)
+        # e.g. 0.2 if mu too big
+        larger = metric < self.target_metric
+
+        self.overshoot = (larger != self.larger)
+        self.scale *= (self.scale_down if self.overshoot else self.scale_up)
+        self.scale = min(self.scale, 0.9)
+
+        if self.verbose:
+            print(f'{self.metric_name}: {self.metric:.2f} -> {self.metric_name}2: {metric:.2f}; overshoot: {self.overshoot}, scale:{self.scale:.3f}, {self.param_name}: {self.param:.3f}')
+
+        self.larger = larger
+        self.metric = metric
+
+        self.hist.append((self.param, self.metric))
+
+
+    def fit(self):
+        """Steps until the average degree is within 3% of the target average degree"""
+        while abs(self.metric - self.target_metric) / self.target_metric > 0.03:
+            self.step()
+
+
+
+def regularised_std_graph_distance(g, degree_percentile=0.9):
+    dd = nk.centrality.DegreeCentrality(g).run().scores()
+    dd = np.array(dd)
+    bot_percentile_degree_indices = np.argsort(dd)[:int(degree_percentile*len(dd))]
+    g_sub = utils.quick_subgraph(g, bot_percentile_degree_indices)
+    distances, std_distances, unique_dists, dist_counts = graph_distances(g_sub)
+    # plt.hist(distances, alpha=0.5, label=f'alpha: {alpha:.3f}')
+    return std_distances
+
+class GirgAlphaFitter(GirgMetricFitter):
+    def __init__(self, target_std_gdist, target_avg_degree, girg_gen_func):
+        self.girg_gen_func_given = girg_gen_func
+        self.const = 1.0
+        self.girg_gen_func_given = girg_gen_func
+        self.target_avg_degree = target_avg_degree
+        self.const_scale = 0.3
+        self.const_hist = []
+
+        super().__init__(target_std_gdist,
+                                self.girg_gen_func,
+                                metric_func=regularised_std_graph_distance, 
+                                metric_name='std_gdist', 
+                                init_param=1.3,
+                                param_base=1.0,
+                                param_name='alpha')
+
+
+
+    def girg_gen_func_const(self, const):
+        return self.girg_gen_func_given(self.param, const)
+
+    def girg_gen_func(self, alpha):
+        gcf = GirgMetricFitter(self.target_avg_degree, 
+                        self.girg_gen_func_const, 
+                        metric_func=utils.avg_degree,
+                        metric_name='avgdeg',
+                        init_param=self.const,
+                        param_base=0.0,
+                        param_name='const')
+        # Pump it up again as with a new alpha things have shifted
+        gcf.scale = min(self.const_scale * 1.5, 0.9)
+        gcf.verbose=self.verbose
+        gcf.fit()
+        self.const = gcf.param
+        self.const_scale = gcf.scale
+        self.const_hist.append(gcf.hist)
+        return self.girg_gen_func_given(alpha, self.const)
 
 
 

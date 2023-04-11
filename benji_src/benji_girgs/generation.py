@@ -222,22 +222,17 @@ def generateEdges(
     return np.triu((unif_mat < probs).astype(np.uint), 1)
     
 
-#@profile
-def generate_GIRG(n=1000, d=3, tau=2.2, alpha=2.0, const=1.0, points_type=PointsTorus):
+ 
+def generate_GIRG_nk(n, d, tau, alpha, const=1.0, points_type=PointsTorus):
     """Generate a GIRG of n vertices, with power law exponent tau, dimesion d
     and alpha """
+    # nx.from_numpy_matrix goes from an adjacency matrix. It actually
+    # works fine from an upper triangular matrix (with zeros on the diagonal)
+    # so all good!
     weights = generateWeights(n, tau)
     pts = generatePositions(n, d)
     pts = points_type(pts)
     edges = generateEdges(weights, pts, alpha, const=const)
-    return edges, weights, pts
-
- 
-def generate_GIRG_nk(n, d, tau, alpha, const=1.0, points_type=PointsTorus):
-    edges, weights, pts = generate_GIRG(n, d, tau, alpha, const, points_type)
-    # nx.from_numpy_matrix goes from an adjacency matrix. It actually
-    # works fine from an upper triangular matrix (with zeros on the diagonal)
-    # so all good!
     g = nk.nxadapter.nx2nk(nx.from_numpy_array(edges))
     return g, edges, weights, pts
 
