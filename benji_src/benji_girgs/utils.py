@@ -163,48 +163,6 @@ def fit_girg_alpha(g_true: nk.Graph, d, tau, num_edges=6000):
         t += 1
 
 
-# This is a simple way to fit alpha
-def fit_girg_general(g_true: nk.Graph, d, tau, num_edges=6000):
-    """Iteratively improves on an initial guess for alpha,
-    fitting to a metric (currently median of percent lower
-    common nhbs)
-    """
-    n = g_true.numberOfNodes()
-    alpha = 2.0
-
-    dd = sorted(nk.centrality.DegreeCentrality(g_true).run().scores(), reverse=True)
-    desired_degree = np.mean(dd)
-
-    weights = girgs.generateWeights(n, tau)
-    pts = girgs.generatePositions(n, d)
-
-    percs_true = get_perc_lower_common_nhbs(g_true, num_edges)
-    percs_true_median = np.median(percs_true)
-    print(f'percs_true_median: {percs_true_median}')
-
-    t = 0
-    k = 0.1
-    l = 0.3
-
-    for i in range(10):
-        print(i)
-        scale = girgs.scaleWeights(weights, desired_degree, d, alpha)
-        weights = list(np.array(weights) * scale)
-        edges = girgs.generateEdges(weights, pts, alpha)
-        g = nk.nxadapter.nx2nk(nx.from_edgelist(edges))
-        percs = get_perc_lower_common_nhbs(g, num_edges)
-        percs_median = np.median(percs)
-        print(f'alpha: {alpha:.3f}, percs_median: {percs_median:.3f}')
-        
-        scaly_thing = l*np.exp(-k * t)
-        print(f'scaly_thing: {scaly_thing}')
-
-        if percs_median > percs_true_median:     
-            alpha = 1 + (alpha - 1) * (1 - scaly_thing)
-        else:
-            alpha = 1 + (alpha - 1) * (1 - scaly_thing)**(-1)
-            
-        t += 1
 
 def scale_param(param, scale, base, larger=True):
     if larger:
@@ -212,9 +170,6 @@ def scale_param(param, scale, base, larger=True):
     else:
         return base + (param - base) * (1 - scale)
     
-
-
-from benji_src.benji_girgs.utils import get_perc_lower_common_nhbs, avg_degree, scale_param
 
 class GirgFitter:
     def __init__(self):
@@ -282,6 +237,8 @@ class AirportGirgFitter(GirgFitter):
         scaly_thing = self.scalers * np.exp(-self.temp_scalers * self.t)
         print(f'scaly_thing: {scaly_thing}')
 
+        # TODO maybe how far not just larger or smaller. Gradient descent esque.
+        # 
         larger = percs_median < self.percs_true_median
         print(f'alpha: {"+" if larger else "-"} ', end='')
         self.alpha = scale_param(self.alpha, scaly_thing[0], 1.0, larger)
@@ -520,6 +477,7 @@ def sort_out_dist_matrix(dists):
 
 
 
+# TODO update as simple_bfs func has changed
 def simple_bfs_search(g, weights, weight_thresh):
     """Performs bfs search """
     suitable_starting = np.argwhere(weights < weight_thresh).reshape(-1)
@@ -531,25 +489,28 @@ def simple_bfs_search(g, weights, weight_thresh):
     return np.median(dist_2s)
 
 
-def simple_bfs(g, weights, weight_thresh, starting_node):
+def simple_bfs(g, starting_node, degree_thresh=None):
     """BFS out from starting_node, only accessing nodes with weight < weight_thresh.
     Nodes with higher weights are ignored.
     
     return: dist = {0: [starting_node], 1: [nodes of dist 1], 2: [nodes of dist 2], ...}"""
-    dists = {0: [starting_node]}
+    dists = {0: set([starting_node])}
     visited = set([starting_node])
     dist = 0
     while True:
 #         print(dist)
         trigger = False
-        new_dist = []
+        new_dist = set([])
         for node in dists[dist]:
             for nhb in g.iterNeighbors(node):
                 if not nhb in visited:
                     trigger = True
                     visited.add(nhb)
-                    if weights[nhb] < weight_thresh:
-                        new_dist.append(nhb)         
+                    if degree_thresh is not None:
+                        if g.degree(nhb) < degree_thresh:
+                            new_dist.add(nhb)
+                    else:
+                        new_dist.add(nhb)         
                         
         dist += 1
         dists[dist] = new_dist
@@ -557,6 +518,38 @@ def simple_bfs(g, weights, weight_thresh, starting_node):
             break
             
     return dists
+
+def bi_bfs(g, a, b):
+    dists_a = simple_bfs(g, a)
+    dists_b = simple_bfs(g, b)
+
+    dist_a = 0
+    dist_b = 0
+    seen_a = set()
+    seen_b = set()
+    while True:
+        if dist_a in dists_a:
+            new_a = dists_a[dist_a]
+            dist_a += 1
+        else:
+            new_a = set()
+
+        if dist_b in dists_b:
+            new_b = dists_b[dist_b]
+            dist_b += 1
+        else:
+            new_b = set()
+
+        if new_a == set() and new_b == set():
+            return new_a, new_b, seen_a, seen_b, dist_a -1, dist_b -1, False
+
+        if new_a.intersection(seen_b) or new_b.intersection(seen_a) or new_a.intersection(new_b):
+            break
+        seen_a.update(new_a)
+        seen_b.update(new_b)
+
+    return new_a, new_b, seen_a, seen_b, dist_a -1, dist_b -1, True
+
 
 
 def quick_subgraph(g, indices):
