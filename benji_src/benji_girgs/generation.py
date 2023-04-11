@@ -22,6 +22,38 @@ jl.eval('include("benji_jl_dists.jl")')
 from scipy.spatial.distance import pdist, squareform
 
 
+class Points(np.ndarray):
+    """
+    Base Class for (n, d) array of points.
+    """
+    def dists(self) -> np.ndarray:
+        """
+        Returns an (n,n) matrix of distances between points
+        """
+        pass
+class PointsTorus(Points):
+    def __new__(cls, input_array):
+        # Input array is an already formed ndarray instance
+        # We first cast to be our class type
+        obj = np.asarray(input_array).view(cls)
+        # Finally, we must return the newly created object:
+        return obj
+
+    def dists(self):
+        return get_dists_julia(self)
+    
+class PointsCube(Points):
+    def __new__(cls, input_array):
+        # Input array is an already formed ndarray instance
+        # We first cast to be our class type
+        obj = np.asarray(input_array).view(cls)
+        # Finally, we must return the newly created object:
+        return obj
+
+    def dists(self):
+        return get_dists_cube(self)
+
+
 
 def powerlaw_dist(tau=2.5, x_min=1, n=1000):
     """sample from a tau exponent power law distribution
@@ -35,7 +67,7 @@ def powerlaw_dist(tau=2.5, x_min=1, n=1000):
     return pareto
 
 
-def torus_uniform(d: int=2, n: int=1000):
+def torus_uniform(d: int=2, n: int=1000) -> np.ndarray:
     """uniformly sample from the torus"""
     torus_side_length = n**(1/d)
     return np.random.uniform(high=torus_side_length, size=(n, d))
@@ -74,14 +106,18 @@ def get_dists(torus_points: np.ndarray, torus_side_length):
     return dists
 
 # Fastest is julia version of Minimal extra memory
-def get_dists_julia(torus_points: np.ndarray, torus_side_length):
+def get_dists_julia(torus_points: np.ndarray):
     torus_points = torus_points.astype(np.float16)
     # jl.get_dists_novars automatically converts torus_side_length to match
     # same eltype as torus_points
+    n, d = torus_points.shape
+    torus_side_length = n**(1/d)
     return jl.get_dists_novars(torus_points, torus_side_length)
+
 
 def get_dists_cube(points: np.ndarray):
     return np.linalg.norm(points[:, None, :] - points[None, :, :], ord=np.inf, axis=-1)
+
 
 
 def get_torus_path(a, b, torus_side_length):
@@ -103,19 +139,19 @@ def generateWeights(
 
 def generatePositions(
     n: int, dimension: int, *, seed: int = None
-) -> List[List[float]]:
+) -> np.ndarray:
     np.random.seed(quick_seed(seed))
     return torus_uniform(dimension, n)
 
 
-def get_probs(weights: List[float], pts: np.ndarray, alpha=2.0, const=1.0):
+def get_probs(weights: List[float], pts: Points, alpha=2.0, const=1.0):
     """
     Computes min(1, w_u w_v / ||x_u - x_v||_inf^d)^alpha
     as a big n x n square matrix (we only need upper triangular bit tho)
     """
     outer = np.outer(weights, weights)
     n, d = pts.shape
-    dists = get_dists_julia(pts, n**(1/d))
+    dists = pts.dists()
     p_uv = np.divide(outer, dists**d)  
     p_uv = np.power(p_uv, alpha)
     p_uv = np.minimum(const * p_uv, 1)
@@ -161,14 +197,23 @@ def get_probs(weights: List[float], pts: np.ndarray, alpha=2.0, const=1.0):
 
 
 def generateEdges(
-    weights: List[float],
-    positions: List[List[float]],
+    weights: np.ndarray,
+    positions: Union[Points, np.ndarray],
     alpha: float,
     *,
     const: float = 1.0,
     seed: int = None,
-) -> List[Tuple[int, int]]:
+) -> np.ndarray:
+    """Generates edges for a GIRG with given
+    weights: (n,) array of weights
+    positions: (n, d) array of positions. np.ndarray defaults to 
+    PointsTorus but can be another Points subclaass
+    returns: (n, n) array of edges
+    """
     np.random.seed(quick_seed(seed))
+    # Convert to torus points if not already a dist'able instance
+    if not issubclass(type(positions), Points):
+        positions = PointsTorus(positions)
     probs = get_probs(weights, positions, alpha, const)
     unif_mat = np.random.uniform(size=probs.shape)
     # upper triangular matrix - lower half and the diagonal zeroed
@@ -178,17 +223,18 @@ def generateEdges(
     
 
 #@profile
-def generate_GIRG(n=1000, d=3, tau=2.2, alpha=2.0, const=1.0):
+def generate_GIRG(n=1000, d=3, tau=2.2, alpha=2.0, const=1.0, points_type=PointsTorus):
     """Generate a GIRG of n vertices, with power law exponent tau, dimesion d
     and alpha """
     weights = generateWeights(n, tau)
     pts = generatePositions(n, d)
-    edges = generateEdges(weights, pts, alpha, const)
+    pts = points_type(pts)
+    edges = generateEdges(weights, pts, alpha, const=const)
     return edges, weights, pts
 
  
-def generate_GIRG_nk(n, d, tau, alpha, const=1.0):
-    edges, weights, pts = generate_GIRG(n, d, tau, alpha, const)
+def generate_GIRG_nk(n, d, tau, alpha, const=1.0, points_type=PointsTorus):
+    edges, weights, pts = generate_GIRG(n, d, tau, alpha, const, points_type)
     # nx.from_numpy_matrix goes from an adjacency matrix. It actually
     # works fine from an upper triangular matrix (with zeros on the diagonal)
     # so all good!

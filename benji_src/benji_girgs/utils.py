@@ -171,192 +171,6 @@ def scale_param(param, scale, base, larger=True):
         return base + (param - base) * (1 - scale)
     
 
-class GirgFitter:
-    def __init__(self):
-        self.t = 0
-        self.temp_scalers = [0.1]
-        self.scalers = [0.3]
-
-    def gen_new_girg(self):
-        new_girg = None
-        return new_girg
-
-    def step(self):
-        girg = self.gen_new_girg()
-        # do some decisions
-        ...
-        self.t += 1
-    
-    def step_n(self, n):
-        for i in range(n):
-            self.step()
-
-
-class AirportGirgFitter(GirgFitter):
-    n = 10317
-    d = 2
-    tau = 2.103
-    num_edges = 6000
-    def __init__(self, weights, dists, g_true):
-        self.t = 0
-        self.temp_scalers = np.array([0.1, 0.1])
-        self.scalers = np.array([0.3, 0.3])
-        self.alpha = 1.3
-        self.const = 1/600
-
-        self.weights = weights # n vector of weights
-        self.dists = dists  # nxn matrix of distances
-        self.g_true = g_true
-
-        percs = get_perc_lower_common_nhbs(g_true, self.num_edges)
-        self.percs_true_median = np.median(percs)
-        self.avg_degree_true = avg_degree(g_true)
-        
-        print(f'percs_true_median: {self.percs_true_median}, avg_degree_true: {self.avg_degree_true}')
-        
-        outer = np.outer(self.weights, self.weights)
-        self.p_uv = np.divide(outer, self.dists**d)
-
-    def gen_new_girg(self):
-        p_uv = self.const * np.power(self.p_uv, self.alpha)
-        p_uv = np.minimum(p_uv, 1)
-        unif_mat = np.random.uniform(size=p_uv.shape)
-        edges = np.triu((unif_mat < p_uv).astype(np.uint), 1)
-        g_girg = nk.nxadapter.nx2nk(nx.from_numpy_array(edges))
-    
-        return g_girg
-    
-    def step(self):
-        g_girg = self.gen_new_girg()
-        # do some decisions
-        percs = get_perc_lower_common_nhbs(g_girg, self.num_edges)
-        percs_median = np.median(percs)
-        girg_avg_degree = avg_degree(g_girg)
-        print(f'percs_median: {percs_median:.3f}, girg_avg_degree: {girg_avg_degree:.3f}')
-
-        scaly_thing = self.scalers * np.exp(-self.temp_scalers * self.t)
-        print(f'scaly_thing: {scaly_thing}')
-
-        # TODO maybe how far not just larger or smaller. Gradient descent esque.
-        # 
-        larger = percs_median < self.percs_true_median
-        print(f'alpha: {"+" if larger else "-"} ', end='')
-        self.alpha = scale_param(self.alpha, scaly_thing[0], 1.0, larger)
-        larger = self.avg_degree_true > girg_avg_degree
-        print(f'c: {"+" if larger else "-"} ')
-        self.const = scale_param(self.const, scaly_thing[1], 0, larger)
-
-        print(f'alpha: {self.alpha:.3f}, const: {self.const:.4e}')
-        self.t += 1
-
-
-class AirportLikelihoodGirgFitter(GirgFitter):
-    d = 2
-    # tau = 2.103
-    num_edges = 6000
-    alpha_step_size=1e-6
-    c_step_size=1e-5
-    def __init__(self, weights, dists, g_true):
-        self.t = 0
-        self.temp_scalers = np.array([0.1, 0.1])
-        self.scalers = np.array([0.3, 0.3])
-        self.alpha = 1.3
-        self.const = 1/600
-
-        self.weights = weights # n vector of weights
-        self.dists = dists  # nxn matrix of distances
-        self.g_true = g_true
-        self.A_true = nx.adjacency_matrix(nk.nxadapter.nk2nx(g_true)).toarray()
-
-        percs = get_perc_lower_common_nhbs(g_true, self.num_edges)
-        self.percs_true_median = np.median(percs)
-        self.avg_degree_true = avg_degree(g_true)
-        
-        print(f'percs_true_median: {self.percs_true_median}, avg_degree_true: {self.avg_degree_true}')
-        
-        outer = np.outer(self.weights, self.weights)
-        # in case some dists are 0 and outer is 0 - set p_uv_initial to 0
-        # if outer isn't 0 we will instead get a massive number, but 
-        # that would have happened for very small dists anyway.
-        self.p_uv_initial = np.nan_to_num(outer / self.dists**self.d)
-        self.p_uv_initial = np.clip(self.p_uv_initial, 1e-10, 1 - 1e-10)
-        # np.fill_diagonal(self.p_uv_initial, 0)
-
-    def gen_new_girg(self):
-        self.p_uv_pow_alpha = np.power(self.p_uv_initial, self.alpha)
-        self.p_uv_no_min = self.const * self.p_uv_pow_alpha
-        self.p_uv = np.minimum(self.p_uv_no_min, 1)
-        unif_mat = np.random.uniform(size=self.p_uv.shape)
-        edges = np.triu((unif_mat < self.p_uv).astype(np.uint), 1)
-        g_girg = nk.nxadapter.nx2nk(nx.from_numpy_array(edges))
-    
-        return g_girg
-    
-    
-    def log_likelihood(self):
-        A = self.A_true
-        A_bar = -self.A_true + 1
-        # no self loops
-        np.fill_diagonal(A, 0)
-        np.fill_diagonal(A_bar, 0)
-
-        # this is all very painful, maybe we can just clip p_uv not to be 0 or 1
-        eps = 1e-7
-        p_uv = np.clip(self.p_uv, eps, 1-eps)
-
-        # self.p_uv has some 0s and 1s, so np.log gives some -inf. We
-        # do nan_to_num which makes -inf -> large negative number, s.t.
-        # A_ij * ?_ij is 0 and not nan when previously ?_ij was -inf.
-
-        # of course if A_ij is not 0, i.e. we have an edge, yet still
-        # self.p_uv is 0, we -ve large, and log_likelihood will be
-        # -inf probably. :(
-        log_likelihood = np.sum(
-            A * np.nan_to_num((np.log(p_uv))) + 
-            A_bar * np.nan_to_num((np.log(1 -p_uv)))
-            )
-
-        p_uv_less_than_one = self.p_uv < 1
-        dp_uv_dc = self.p_uv_pow_alpha * p_uv_less_than_one
-        dp_uv_dalpha = p_uv_less_than_one * p_uv * np.log(self.p_uv_initial)
-
-        # gradient_c = np.sum(np.nan_to_num(A / p_uv) * dp_uv_dc + np.nan_to_num(A_bar / (1 - p_uv)) * (- dp_uv_dc))
-        gradient_c = np.sum(
-            A / self.const * p_uv_less_than_one + 
-            A_bar / (1 - p_uv) * (-p_uv / self.const) * p_uv_less_than_one
-        )
-        gradient_alpha = np.sum(
-            A / p_uv * dp_uv_dalpha +
-            A_bar / (1 - p_uv) * (- dp_uv_dalpha)
-        )
-
-        return log_likelihood, gradient_c, gradient_alpha
-
-    def step(self):
-        g_girg = self.gen_new_girg()
-        # do some decisions
-        log_likelihood, gradient_c, gradient_alpha = self.log_likelihood()
-        print(f'log_likelihood: {log_likelihood:.4e}, gradient_c: {gradient_c:.4e}, gradient_alpha: {gradient_alpha:.4e}')
-        print(f'g_girg avg deg: {avg_degree(g_girg):.2f}, g_true avg deg {self.avg_degree_true:.2f}')
-
-
-        scaly_thing = self.scalers * np.exp(-self.temp_scalers * self.t)
-        # print(f'scaly_thing: {scaly_thing}')
-
-        larger = gradient_alpha > 0
-        print(f'alpha: {"+" if larger else "-"} ', end='')
-        self.alpha = scale_param(self.alpha, scaly_thing[0], 1.0, larger)
-        # self.alpha += gradient_alpha * self.alpha_step_size
-        larger = gradient_c > 0
-        # self.const += gradient_c * self.c_step_size
-        print(f'c: {"+" if larger else "-"} ')
-        self.const = scale_param(self.const, scaly_thing[1], 0, larger)
-
-        print(f'alpha: {self.alpha:.3f}, const: {self.const:.4e}')
-        self.t += 1
-
-
-
 
 def expected_node_weight_func(n, tau, alpha, d):
     w_mean = (tau-1)/(tau-2)
@@ -600,3 +414,50 @@ def get_largest_component(g):
     comp_id_to_size = components.getComponentSizes()
     largest_component = np.argmax(list(comp_id_to_size.values()))
     return components.getComponents()[largest_component]
+
+
+def get_diffmap(g):
+    """
+    Provided g is connected, find the diffusion map of g.
+    w are the eigenvalues, decreasing from 1.0, lambda_2, lambda_3, ...
+    diff_map(i) is the tth diffusion iteration of node i as a linear combination of Psi columns
+    """
+    if nk.components.ConnectedComponents(g).run().numberOfComponents() > 1:
+        raise Exception("Graph is not connected")
+
+
+    gnx = nk.nxadapter.nk2nx(g)
+
+    A = nx.linalg.adjacency_matrix(gnx).todense()
+
+    D = np.array([x[1] for x in (gnx.degree)])
+    D_h = D**(0.5)
+    D_hi = D**(-0.5)
+
+    # M_ij = W_ij / d_i
+    M = np.diag(1/D) @ A
+    M = 0.5 * M + 0.5 * np.eye(M.shape[0])
+    # S_ij = W_ij / sqrt(d_i d_j) = sqrt(d_i) M_ij / sqrt(d_j)
+    S = np.diag(D_h) @ M @ np.diag(D_hi)
+
+
+    w, V = np.linalg.eigh(S)
+
+    # S = V @ np.diag(w) @ V.T
+    # M = D^{-1/2} @ S @ D^{1/2} 
+    # = D^{-1/2} @ V @ np.diag(w) @ V.T @ D^{1/2}
+    # = Phi @ np.diag(w) @ Psi.T
+    # Phi = D^{-1/2} @ V
+    # Psi = D^{1/2} @ V
+    Phi = np.diag(D_hi) @ V
+    Psi = np.diag(D_h) @ V
+
+    n = Phi.shape[0]
+    w = np.flip(w)
+
+    def diff_map(i, t):
+        # n = 5, so 0, 1, 2, 3, 4, we want to get 3, 2, 1, 0
+        # so 5-2 -> -1, -1
+        return np.array([Phi[i, j] for j in range(n-2, -1, -1)]) * (w[1:]**t)
+
+    return w, Phi, Psi, diff_map
