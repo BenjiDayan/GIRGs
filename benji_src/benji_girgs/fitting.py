@@ -4,19 +4,22 @@ import networkx as nx
 import numpy as np
 from networkit.graph import Graph
 import networkx as nx
+import pandas as pd
+import seaborn as sns
 
 from tqdm import tqdm
+import powerlaw
 
-from benji_src.benji_girgs.generation import get_dists
+from benji_src.benji_girgs.generation import cgirg_gen, get_dists
 from benji_src.benji_girgs import utils
 from benji_src.benji_girgs.utils import avg_degree, get_perc_lower_common_nhbs, scale_param
+
 # import os
 # if not "NO_CPP_GIRGS" in os.environ:
 try:
     from girg_sampling import girgs
 except Exception:
     pass
-
 
 
 
@@ -131,26 +134,6 @@ def biBFS_sample(g, n_samples=1000, use_tqdm=False):
 
     return sizes
 
-    
-
-    # nan_to_num to make sure infinite distances are replaced by large +ve
-    distances = np.array(np.nan_to_num(distances)).astype(np.int64)
-    unique_dists, dist_counts = np.unique(distances, return_counts=True)
-    fixed_infinite_dist = False
-    if len(unique_dists) > 1:
-        if unique_dists[-1] != unique_dists[-2] + 1:
-            unique_dists[-1] = -1
-
-            fixed_infinite_dist = True
-            distances[distances > unique_dists[-2]] = unique_dists[-1] + 2
-            std_distances = np.std(distances)
-            # distances[distances > unique_dists[-2]] = -1
-
-    if not fixed_infinite_dist:
-        std_distances = np.std(distances)
-
-    std_distances = np.std(distances)
-    return distances, std_distances, unique_dists, dist_counts
 
 
 class GirgFitter:
@@ -173,57 +156,34 @@ class GirgFitter:
 
 
 class GirgConstFitter(GirgFitter):
-    def __init__(self, target_avg_degree, girg_gen_func):
-        self.t = 0
-        self.scale = 0.3
-        self.scale_up = 1.1
-        self.scale_down = 0.5
-        self.target_avg_degree = target_avg_degree
-        self.girg_gen_func = girg_gen_func
-        self.overshoot = True
-        self.verbose=False
-        self.const = 1.0
-
-        girg = self.girg_gen_func(self.const)
-        self.mu = avg_degree(girg)
-        # e.g. 0.2 if mu too big
-        self.larger = self.mu < self.target_avg_degree
-
-    def step(self):
-        self.const = scale_param(self.const, self.scale, 0.0, self.larger)
-
-        girg = self.girg_gen_func(self.const)
-        mu = avg_degree(girg)
-        # e.g. 0.2 if mu too big
-        larger = mu < self.target_avg_degree
-
-        # girg2 = self.girg_gen_func(self.const)
-        # mu2 = avg_degree(girg2)
-        # larger2 = mu2 < self.target_avg_degree
-        # self.mu = mu2
-        self.overshoot = (larger != self.larger)
-        self.scale *= (self.scale_down if self.overshoot else self.scale_up)
-        self.scale = min(self.scale, 0.9)
-
-        if self.verbose:
-            print(f'mu:{self.mu:.2f} -> mu2:{mu:.2f}; overshoot: {self.overshoot}, scale:{self.scale:.3f}, const: {self.const:.3f}')
-
-        self.larger = larger
-        self.mu = mu
-
-
-    def fit(self):
-        """Steps until the average degree is within 3% of the target average degree"""
-        while abs(self.mu - self.target_avg_degree) / self.target_avg_degree > 0.03:
-            self.step()
+    def __init__(self, target_avg_degree, girg_gen_func_const):
+        super().__init__(
+            target_avg_degree, 
+            girg_gen_func_const, 
+            metric_func=utils.avg_degree,
+            metric_name='avgdeg',
+            init_param=1.0,
+            param_base=0.0,
+            param_name='const')
 
 
 class GirgMetricFitter(GirgFitter):
     def __init__(self, target_metric, girg_gen_func, metric_func, metric_name='avgdeg', init_param=1.0, param_base=0.0, param_name='const'):
         self.t = 0
         self.scale = 0.3
+        # If metric doesn't overshoot, increase scale by 10%
         self.scale_up = 1.1
+        # If metric overshoots, decrease scale by 50%
         self.scale_down = 0.5
+        # the fit is considered good if the metric is within 3% of the target metric
+        self.fit_percent = 0.03
+        # After fit is achieved take at least this many more steps to confirm
+        # The last step must be fitting or we repeat.
+        self.post_fit_steps = 0
+        self.max_fit_steps = 100 # max number of steps to take before giving up when self.fit
+
+        self.fit_count = -1
+
         self.target_metric = target_metric
         self.girg_gen_func = girg_gen_func
         self.overshoot = True
@@ -255,35 +215,87 @@ class GirgMetricFitter(GirgFitter):
         self.scale = min(self.scale, 0.9)
 
         if self.verbose:
-            print(f'{self.metric_name}: {self.metric:.2f} -> {self.metric_name}2: {metric:.2f}; overshoot: {self.overshoot}, scale:{self.scale:.3f}, {self.param_name}: {self.param:.3f}')
+            print(f'{self.metric_name}: {self.metric:.3f} -> {self.metric_name}2: {metric:.2f}; overshoot: {self.overshoot}, scale:{self.scale:.3f}, {self.param_name}: {self.param:.3f}')
 
         self.larger = larger
         self.metric = metric
 
         self.hist.append((self.param, self.metric))
 
+    def check_fit(self):
+        did_fit = abs(self.metric - self.target_metric) / self.target_metric < self.fit_percent
+        if did_fit and self.verbose:
+            print(f'Fit! fit_count: {self.fit_count}; post_fit_steps: {self.post_fit_steps}')
+        return did_fit
 
     def fit(self):
-        """Steps until the average degree is within 3% of the target average degree"""
-        while abs(self.metric - self.target_metric) / self.target_metric > 0.03:
+        """Steps until the average degree is within 3% of the target average degree
+        Some extra steps are taken once the fit is acheived to confirm that the fit is stable.
+        These extra steps may be repeated if the fit is not stable."""
+        num_steps = 0
+        while True:
+            if self.fit_count == -1:
+                while not self.check_fit():
+                    self.step()
+                self.fit_count = 0
+            if self.fit_count == self.post_fit_steps:
+                if self.check_fit():
+                    break
+                else:
+                    self.fit_count = 0
             self.step()
+            self.fit_count += 1
+
+        while True:
+            self.step()
+            num_steps +=1 
+            if num_steps > self.max_fit_steps:
+                raise NotImplementedError('Max fit steps exceeded')
+            now_fit = self.check_fit()
+            if self.fit_count == -1:
+                if now_fit:
+                    self.fit_count = 0
+            elif self.fit_count == self.post_fit_steps:
+                if now_fit:
+                    break
+                else:
+                    self.fit_count = 0
+            else:
+                self.fit_count += 1
 
 
 
-def regularised_std_graph_distance(g, degree_percentile=0.9):
+# degree_percentile of e.g. <0.9 is quite important, otherwise there is barely any 
+# difference in gdist - high degree nodes influence this too much.
+# Decreasing this maximally is probably good, up to the point where it's too small.
+# Ehhh. Maybe just keep as 0.9.
+def regularised_std_graph_distance(g, degree_percentile=0.9, n_samples=1000):
     dd = nk.centrality.DegreeCentrality(g).run().scores()
     dd = np.array(dd)
     bot_percentile_degree_indices = np.argsort(dd)[:int(degree_percentile*len(dd))]
     g_sub = utils.quick_subgraph(g, bot_percentile_degree_indices)
-    distances, std_distances, unique_dists, dist_counts = graph_distances(g_sub)
+    cc = nk.components.ConnectedComponents(g_sub)
+    # cc.run()
+    g_sub = cc.extractLargestConnectedComponent(g_sub, True)
+    if g_sub.numberOfNodes() < degree_percentile*0.15*len(dd):
+        raise ValueError('Too many nodes removed')
+    distances, std_distances, unique_dists, dist_counts = graph_distances(g_sub, n_samples)
     # plt.hist(distances, alpha=0.5, label=f'alpha: {alpha:.3f}')
     return std_distances
 
+
+# TODO I think these are both bad ideas. Just fix percent at 0.05?
+def get_std_std_gdist(std_gdist):
+    return np.exp(std_gdist * 0.85) / 100
+
+def get_fit_percent(std_gdist):
+    return get_std_std_gdist(std_gdist) / std_gdist
+
 class GirgAlphaFitter(GirgMetricFitter):
-    def __init__(self, target_std_gdist, target_avg_degree, girg_gen_func):
-        self.girg_gen_func_given = girg_gen_func
+    def __init__(self, target_std_gdist, target_avg_degree, girg_gen_func_alpha_const):
+        """girg_gen_func should take alpha and const as arguments"""
         self.const = 1.0
-        self.girg_gen_func_given = girg_gen_func
+        self.girg_gen_func_alpha_const = girg_gen_func_alpha_const
         self.target_avg_degree = target_avg_degree
         self.const_scale = 0.3
         self.const_hist = []
@@ -299,16 +311,17 @@ class GirgAlphaFitter(GirgMetricFitter):
 
 
     def girg_gen_func_const(self, const):
-        return self.girg_gen_func_given(self.param, const)
-
-    def girg_gen_func(self, alpha):
-        gcf = GirgMetricFitter(self.target_avg_degree, 
-                        self.girg_gen_func_const, 
-                        metric_func=utils.avg_degree,
-                        metric_name='avgdeg',
-                        init_param=self.const,
-                        param_base=0.0,
-                        param_name='const')
+        return self.girg_gen_func_alpha_const(self.param, const)
+    
+    def fit_const(self):
+        gcf = GirgMetricFitter(
+            self.target_avg_degree, 
+            self.girg_gen_func_const, 
+            metric_func=utils.avg_degree,
+            metric_name='avgdeg',
+            init_param=self.const,
+            param_base=0.0,
+            param_name='const')
         # Pump it up again as with a new alpha things have shifted
         gcf.scale = min(self.const_scale * 1.5, 0.9)
         gcf.verbose=self.verbose
@@ -316,8 +329,174 @@ class GirgAlphaFitter(GirgMetricFitter):
         self.const = gcf.param
         self.const_scale = gcf.scale
         self.const_hist.append(gcf.hist)
-        return self.girg_gen_func_given(alpha, self.const)
 
+    def girg_gen_func(self, alpha):
+        self.fit_const()
+        return self.girg_gen_func_alpha_const(alpha, self.const)
+    
+
+class CGirgAlphaFitter(GirgAlphaFitter):
+    """self.girg_and_weight_gen_func_alpha_const returns girg, weights. 
+    The weights are needed for fitting the const. If we're using given degree weights then make
+    sure these are returned each time - otherwise regenerated"""
+
+    def __init__(self, target_std_gdist, target_avg_degree, girg_and_weight_gen_func_alpha_const, d):
+        self.girg_and_weight_gen_func_alpha_const = girg_and_weight_gen_func_alpha_const
+        _, self.weights = self.girg_and_weight_gen_func_alpha_const(1.3, 1.0)
+        # Whenever we call self.girg_gen_func(alpha) = self.girg_gen_func_alpha_const(alpha, self.const),
+        # in fact we are fitting the const using self.weights, which is updated by calls to 
+        # self.girg_gen_func.
+        self.d = d
+        super().__init__(target_std_gdist, target_avg_degree, self.girg_gen_func_alpha_const)
+        
+    def girg_gen_func_alpha_const(self, alpha, const):
+        """self.weights is updated whenever this method is called"""
+        girg, weights = self.girg_and_weight_gen_func_alpha_const(alpha, const)
+        self.weights = weights
+        return girg
+
+    def fit_const(self):
+        self.const = girgs.scaleWeights(self.weights, self.target_avg_degree, self.d, self.param)
+
+    def girg_gen_func(self, alpha):
+        self.fit_const()
+        girg = self.girg_gen_func_given(alpha, self.const)
+        mu = utils.avg_degree(girg)
+        self.const_hist.append((self.const, mu))
+        return girg
+    
+# TODO Fix this
+class CGirgAlphaFitterTODOFIX(GirgMetricFitter):
+    def __init__(self, target_std_gdist, target_avg_degree, girg_and_const_gen_func):
+        """girg_gen_func should take alpha and const as arguments"""
+        self.const = 1.0
+        self.girg_and_const_gen_func = girg_and_const_gen_func
+        self.target_avg_degree = target_avg_degree
+
+        super().__init__(target_std_gdist,
+                                self.girg_gen_func,
+                                metric_func=regularised_std_graph_distance, 
+                                metric_name='std_gdist', 
+                                init_param=1.3,
+                                param_base=1.0,
+                                param_name='alpha')
+        
+    def girg_gen_func(self, alpha):
+        girg, const = self.girg_and_const_gen_func(alpha)
+        self.const = const
+        if self.verbose:
+            print(f'const: {self.const:.3f}')
+        return girg
+    
+    
+def fit_cgirg(g, d, fit_percent=0.04, max_fit_steps=25, post_fit_steps=2, verbose=False):
+    """Fit a CGIRG to a given graph g. Returns alpha, const, hist,
+    and True/False whether the fit was successful. Hopefully even if the fit
+    was not successful, the returned alpha and const will be close to the
+    a good value?"""
+    dd = sorted(nk.centrality.DegreeCentrality(g).run().scores(), reverse=True)
+    fit = powerlaw.Fit(dd, discrete=True)
+    tau = fit.power_law.alpha
+
+
+    target_avg_degree = utils.avg_degree(g)
+    try:
+        target_std_gdist = regularised_std_graph_distance(g)
+    except ValueError as e:
+        print(e)
+        alpha = 1.3
+        weights = girgs.generateWeights(g.numberOfNodes(), tau)
+        const = girgs.scaleWeights(weights, target_avg_degree, d, alpha)
+        return alpha, const, tau, [], False
+
+
+    if verbose:
+        print(f'target_avg_degree: {target_avg_degree:.3f}')
+        print(f'target_std_gdist: {target_std_gdist:.3f}')
+        print(f'fit tau: {tau:.3f}')
+
+    n = g.numberOfNodes()
+
+
+    def girg_and_const_gen_func(alpha):
+        g, edges, weights, pts, c, id2gnk = cgirg_gen(n, d, tau, alpha, desiredAvgDegree=target_avg_degree, weights=None)
+        return g, c
+
+    caf = CGirgAlphaFitter(target_std_gdist, target_avg_degree, girg_and_const_gen_func)
+    # Try to be quite lenient in allowing fitting to occur :)
+    caf.fit_percent = fit_percent
+    caf.max_fit_steps = max_fit_steps
+    caf.post_fit_steps = post_fit_steps
+    caf.verbose = verbose
+    try:
+        caf.fit()
+    except (NotImplementedError, ValueError) as e:
+        print(e)
+        return caf.param, caf.const, tau, caf.hist, False
+    return caf.param, caf.const, tau, caf.hist, True
+        
+
+# n = 1000
+# d = 3
+# tau = 2.1
+# target_avg_degree=10
+# target_std_gdist = 1.2
+# weights=None
+# # weights = list(degrees))
+# def girg_and_weight_gen_func(alpha):
+#     g, edges, weights, pts, c, id2gnk = generation.generate_girg(n, d, tau, alpha, desiredAvgDegree=target_avg_degree, weights=weights)
+#     return g, c
+
+# class CGirgFixedWeightAlphaFitter(GirgMetricFitter):
+#     def __init__(self, d:int, weights: np.ndarray, *args, **kwargs):
+#         self.d = d
+#         self.weights = weights
+
+#         def girg_gen_func(alpha
+
+#         self.d = d
+#         self.const = 1.0
+#         self.target_avg_degree = target_avg_degree
+#         self.const_hist = []
+#         self.weights = weights
+#         self.n = len(self.weights)
+
+#         super().__init__(target_std_gdist,
+#                                 self.girg_gen_func,
+#                                 metric_func=regularised_std_graph_distance, 
+#                                 metric_name='std_gdist', 
+#                                 init_param=1.3,
+#                                 param_base=1.0,
+#                                 param_name='alpha')
+
+#     # def girg_gen_func_const(self, const):
+#     #     return self.girg_gen_func_given(self.param, const)
+
+#     def girg_gen_func(self, alpha: float):
+#         """Generate a GIRG with C-library"""
+#         self.const = girgs.scaleWeights(self.weights, self.target_avg_degree, self.d, alpha)
+#         scaled_weights = list(np.array(self.weights) * self.const)
+
+#         pts = girgs.generatePositions(self.n, self.d)
+#         edges = girgs.generateEdges(scaled_weights, pts, alpha)
+#         # Make graph from edge list (not adjacency matrix)
+#         gnx = nx.from_edgelist(edges)
+#         missing_nodes = set(list(range(self.n)))
+#         for node in gnx.nodes:
+#             missing_nodes.remove(node)
+
+#         for missing_node in missing_nodes:
+#             gnx.add_node(missing_node)
+
+#         gnk = nk.nxadapter.nx2nk(gnx)
+#         id2gnk = dict((gnx_id, gnk_id) for (gnx_id, gnk_id) in zip(gnx.nodes(), range(gnx.number_of_nodes())))
+
+#         mu = utils.avg_degree(gnk)
+
+#         self.const_hist.append((self.const, mu))
+
+#         return gnk
+    
 
 
 
@@ -483,5 +662,4 @@ class AirportLikelihoodGirgFitter(GirgFitter):
 
         print(f'alpha: {self.alpha:.3f}, const: {self.const:.4e}')
         self.t += 1
-
 

@@ -8,7 +8,7 @@ try:
 except Exception:
     pass
 
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 import random
 
 import powerlaw
@@ -239,14 +239,24 @@ def generate_GIRG_nk(n, d, tau, alpha, const=1.0, points_type=PointsTorus):
 
 
 
-def cgirg_gen(n, d, tau, alpha, desiredAvgDegree=None):
-    """Generate a GIRG with C-library"""
-    weights = girgs.generateWeights(n, tau)
+def cgirg_gen(n, d, tau, alpha, desiredAvgDegree=None, const=None, weights: Optional[List[float]] = None):
+    """Generate a GIRG with C-library
+    """
+    if weights is None:
+        weights = girgs.generateWeights(n, tau)
     scaled_weights = weights
-    const = 1
-    if desiredAvgDegree is not None:
-        const = girgs.scaleWeights(weights, desiredAvgDegree, d, alpha)
-        scaled_weights = list(np.array(weights) * const)
+
+    if const is not None and desiredAvgDegree is not None:
+        raise ValueError("Cannot specify both const and desiredAvgDegree")
+    
+    if const is None:
+        if desiredAvgDegree is not None:
+            const = girgs.scaleWeights(weights, desiredAvgDegree, d, alpha)
+        else:  
+            const=1.0
+
+    scaled_weights = list(np.array(weights) * const)
+        
     pts = girgs.generatePositions(n, d)
     edges = girgs.generateEdges(scaled_weights, pts, alpha)
     # Make graph from edge list (not adjacency matrix)
