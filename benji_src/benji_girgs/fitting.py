@@ -10,9 +10,9 @@ import seaborn as sns
 from tqdm import tqdm
 import powerlaw
 
-from benji_src.benji_girgs.generation import cgirg_gen, get_dists
-from benji_src.benji_girgs import utils
-from benji_src.benji_girgs.utils import avg_degree, get_perc_lower_common_nhbs, scale_param
+from benji_girgs.generation import cgirg_gen, get_dists
+from benji_girgs import utils
+from benji_girgs.utils import avg_degree, get_perc_lower_common_nhbs, scale_param
 
 # import os
 # if not "NO_CPP_GIRGS" in os.environ:
@@ -204,6 +204,7 @@ class GirgMetricFitter(GirgFitter):
 
     def step(self):
         self.param = scale_param(self.param, self.scale, self.param_base, self.larger)
+        assert self.param >= self.param_base
 
         girg = self.girg_gen_func(self.param)
         metric = self.metric_func(girg)
@@ -233,19 +234,6 @@ class GirgMetricFitter(GirgFitter):
         Some extra steps are taken once the fit is acheived to confirm that the fit is stable.
         These extra steps may be repeated if the fit is not stable."""
         num_steps = 0
-        while True:
-            if self.fit_count == -1:
-                while not self.check_fit():
-                    self.step()
-                self.fit_count = 0
-            if self.fit_count == self.post_fit_steps:
-                if self.check_fit():
-                    break
-                else:
-                    self.fit_count = 0
-            self.step()
-            self.fit_count += 1
-
         while True:
             self.step()
             num_steps +=1 
@@ -284,6 +272,7 @@ def regularised_std_graph_distance(g, degree_percentile=0.9, n_samples=1000):
     return std_distances
 
 
+
 # TODO I think these are both bad ideas. Just fix percent at 0.05?
 def get_std_std_gdist(std_gdist):
     return np.exp(std_gdist * 0.85) / 100
@@ -302,8 +291,8 @@ class GirgAlphaFitter(GirgMetricFitter):
 
         super().__init__(target_std_gdist,
                                 self.girg_gen_func,
-                                metric_func=regularised_std_graph_distance, 
-                                metric_name='std_gdist', 
+                                metric_func=utils.LCC, 
+                                metric_name='LCC', 
                                 init_param=1.3,
                                 param_base=1.0,
                                 param_name='alpha')
@@ -334,8 +323,8 @@ class GirgAlphaFitter(GirgMetricFitter):
         self.fit_const()
         return self.girg_gen_func_alpha_const(alpha, self.const)
     
-
-class CGirgAlphaFitter(GirgAlphaFitter):
+# TODO Fix this
+class CGirgAlphaFitterTODOFIX(GirgAlphaFitter):
     """self.girg_and_weight_gen_func_alpha_const returns girg, weights. 
     The weights are needed for fitting the const. If we're using given degree weights then make
     sure these are returned each time - otherwise regenerated"""
@@ -365,8 +354,7 @@ class CGirgAlphaFitter(GirgAlphaFitter):
         self.const_hist.append((self.const, mu))
         return girg
     
-# TODO Fix this
-class CGirgAlphaFitterTODOFIX(GirgMetricFitter):
+class CGirgAlphaFitter(GirgMetricFitter):
     def __init__(self, target_std_gdist, target_avg_degree, girg_and_const_gen_func):
         """girg_gen_func should take alpha and const as arguments"""
         self.const = 1.0
@@ -375,8 +363,8 @@ class CGirgAlphaFitterTODOFIX(GirgMetricFitter):
 
         super().__init__(target_std_gdist,
                                 self.girg_gen_func,
-                                metric_func=regularised_std_graph_distance, 
-                                metric_name='std_gdist', 
+                                metric_func=utils.LCC, 
+                                metric_name='lcc', 
                                 init_param=1.3,
                                 param_base=1.0,
                                 param_name='alpha')
@@ -389,7 +377,7 @@ class CGirgAlphaFitterTODOFIX(GirgMetricFitter):
         return girg
     
     
-def fit_cgirg(g, d, fit_percent=0.04, max_fit_steps=25, post_fit_steps=2, verbose=False):
+def fit_cgirg(g, d, fit_percent=0.04, max_fit_steps=13, post_fit_steps=2, verbose=False):
     """Fit a CGIRG to a given graph g. Returns alpha, const, hist,
     and True/False whether the fit was successful. Hopefully even if the fit
     was not successful, the returned alpha and const will be close to the
@@ -400,19 +388,21 @@ def fit_cgirg(g, d, fit_percent=0.04, max_fit_steps=25, post_fit_steps=2, verbos
 
 
     target_avg_degree = utils.avg_degree(g)
-    try:
-        target_std_gdist = regularised_std_graph_distance(g)
-    except ValueError as e:
-        print(e)
-        alpha = 1.3
-        weights = girgs.generateWeights(g.numberOfNodes(), tau)
-        const = girgs.scaleWeights(weights, target_avg_degree, d, alpha)
-        return alpha, const, tau, [], False
+    # try:
+    #     target_std_gdist = regularised_std_graph_distance(g)
+    # except ValueError as e:
+    #     print(e)
+    #     alpha = 1.3
+    #     weights = girgs.generateWeights(g.numberOfNodes(), tau)
+    #     const = girgs.scaleWeights(weights, target_avg_degree, d, alpha)
+    #     return alpha, const, tau, [], False
+
+    target_lcc = utils.LCC(g)
 
 
     if verbose:
         print(f'target_avg_degree: {target_avg_degree:.3f}')
-        print(f'target_std_gdist: {target_std_gdist:.3f}')
+        print(f'target_lcc: {target_lcc:.3f}')
         print(f'fit tau: {tau:.3f}')
 
     n = g.numberOfNodes()
@@ -422,7 +412,7 @@ def fit_cgirg(g, d, fit_percent=0.04, max_fit_steps=25, post_fit_steps=2, verbos
         g, edges, weights, pts, c, id2gnk = cgirg_gen(n, d, tau, alpha, desiredAvgDegree=target_avg_degree, weights=None)
         return g, c
 
-    caf = CGirgAlphaFitter(target_std_gdist, target_avg_degree, girg_and_const_gen_func)
+    caf = CGirgAlphaFitter(target_lcc, target_avg_degree, girg_and_const_gen_func)
     # Try to be quite lenient in allowing fitting to occur :)
     caf.fit_percent = fit_percent
     caf.max_fit_steps = max_fit_steps
@@ -432,8 +422,8 @@ def fit_cgirg(g, d, fit_percent=0.04, max_fit_steps=25, post_fit_steps=2, verbos
         caf.fit()
     except (NotImplementedError, ValueError) as e:
         print(e)
-        return caf.param, caf.const, tau, caf.hist, False
-    return caf.param, caf.const, tau, caf.hist, True
+        return caf.param, caf.const, tau, caf.hist, target_lcc, False
+    return caf.param, caf.const, tau, caf.hist, target_lcc, True
         
 
 # n = 1000

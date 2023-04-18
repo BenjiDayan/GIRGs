@@ -5,7 +5,7 @@ import numpy as np
 from networkit.graph import Graph
 import networkx as nx
 
-from benji_src.benji_girgs.generation import get_dists
+from benji_girgs.generation import get_dists
 # import os
 # if not "NO_CPP_GIRGS" in os.environ:
 try:
@@ -17,6 +17,12 @@ except Exception:
 def avg_degree(g: Graph):
     return np.mean(nk.centrality.DegreeCentrality(g).run().scores())
 
+
+def LCC(g):
+    """local clustering coefficient"""
+    lcc = nk.centrality.LocalClusteringCoefficient(g)
+    lcc.run()
+    return(np.mean(lcc.scores()))
 
 # sample_edge_stuff but with knowledge of the graph?
 def sample_edge_stuff_complex(g, num_edges, weights, edges, pts):
@@ -164,12 +170,12 @@ def fit_girg_alpha(g_true: nk.Graph, d, tau, num_edges=6000):
 
 
 
-def scale_param(param, scale, base, larger=True):
+def scale_param(param, scale, base, larger=True, eps=1e-10):
     if larger:
-        return base + (param - base) * (1 - scale)**(-1)
+        out =  base + (param - base) * (1 - scale)**(-1)
     else:
-        return base + (param - base) * (1 - scale)
-    
+        out =  base + (param - base) * (1 - scale)
+    return max(out, base + eps)  # make sure it's not too small - alpha=1.0 throws an error.
 
 
 def expected_node_weight_func(n, tau, alpha, d):
