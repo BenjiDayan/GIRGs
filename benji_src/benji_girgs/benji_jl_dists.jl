@@ -1,4 +1,3 @@
-
 function get_dists(pts::Matrix{Float64}, torus_side_length::Float64)
 	n = size(pts)[1]
 	lpts = repeat(pts, n)

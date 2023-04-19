@@ -1,11 +1,9 @@
 from itertools import zip_longest
 import networkit as nk
-import networkx as nx
 import numpy as np
 from networkit.graph import Graph
 import networkx as nx
 
-from benji_girgs.generation import get_dists
 # import os
 # if not "NO_CPP_GIRGS" in os.environ:
 try:
@@ -13,46 +11,20 @@ try:
 except Exception:
     pass
 
-
 def avg_degree(g: Graph):
-    return np.mean(nk.centrality.DegreeCentrality(g).run().scores())
-
+    num_edges = g.numberOfEdges()
+    num_nodes = g.numberOfNodes()
+    return (2 * num_edges) / num_nodes
 
 def LCC(g):
-    """local clustering coefficient"""
+    """local clustering coefficient - average of CC over all nodes.
+    Same as given by the nk.overview
+    nk.globals.clustering(g) gives an approximation of the local clustering coefficient
+    """
     lcc = nk.centrality.LocalClusteringCoefficient(g)
     lcc.run()
-    return(np.mean(lcc.scores()))
+    return np.mean(lcc.scores())
 
-# sample_edge_stuff but with knowledge of the graph?
-def sample_edge_stuff_complex(g, num_edges, weights, edges, pts):
-    cni = nk.linkprediction.CommonNeighborsIndex(g)
-
-    degrees = np.array([g.degree(node) for node in g.iterNodes()]).astype(np.int64)
-    stuff = []
-    lambdas = np.arange(0.1, 1.0, 0.1)
-    for i in np.random.choice(len(edges), num_edges):
-        a, b = edges[i]
-        degs = [g.degree(a), g.degree(b)]
-        if degs[0] > degs[1]:
-            a, b = b, a
-        dist = get_dists(np.stack([pts[a], pts[b]]), n**(1/d))[0, 1]
-
-        a_nhbs = np.array(list(g.iterNeighbors(a)))
-        b_nhbs = np.array(list(g.iterNeighbors(b)))
-        a_weights = degrees[a_nhbs]
-        lambda_intersects = []
-        for l in lambdas:
-            a_big_nhbs = a_nhbs[a_weights > degrees[a] * l]
-            lambda_intersects.append(
-                (l, 
-                 len(set(b_nhbs).intersection(set(a_big_nhbs)))/len(a_big_nhbs)
-                )
-            )
-        stuff.append((min(degs), max(degs), int(cni.run(a, b)), dist, lambda_intersects))
-        
-
-    return stuff
 
 def sample_edge_stuff(g: Graph, num_edges: int):
     """Samples num_edges randomly from g, and finds number of common neighbors
@@ -82,25 +54,12 @@ def sample_edge_stuff(g: Graph, num_edges: int):
                 )
             )
         stuff.append((min(degs), max(degs), int(cni.run(a, b)), lambda_intersects))
-        
 
     return stuff
 
 def get_perc_lower_common_nhbs(g: Graph, num_edges):
     """# of common nhbs between random edges a-b, divided by
     number of nhbs of the smaller degree node"""
-    stuff = sample_edge_stuff(g, num_edges)
-    return [x[2]/x[0] for x in stuff]
-
-# TODO deprecated
-def sample_edge_stuff2(g, num_edges):
-    stuff = sample_edge_stuff(g, num_edges)
-    degrees = np.array([g.degree(node) for node in g.iterNodes()]).astype(np.int64)
-    qs = np.quantile([g.degree(node) for node in g.iterNodes()], [0.15, 0.5, 0.85])
-    return [x for x in stuff if x[0] < qs[0] and x[1] > qs[-1] ]
-
-# TODO remove?
-def get_common_nb_percs2(g, num_edges):
     stuff = sample_edge_stuff(g, num_edges)
     return [x[2]/x[0] for x in stuff]
 
@@ -118,7 +77,7 @@ def sample_possible_triangles(g, num_triangles):
         a, b = np.random.choice(len(c_nhbs), 2, replace=False)
         a, b = c_nhbs[a], c_nhbs[b]
 
-        a_deg, b_deg= g.degree(a), g.degree(b)
+        a_deg, b_deg = g.degree(a), g.degree(b)
         stuff.append((a_deg, b_deg, c_deg, g.hasEdge(a, b)))
 
     return stuff
@@ -167,15 +126,6 @@ def fit_girg_alpha(g_true: nk.Graph, d, tau, num_edges=6000):
             alpha = 1 + (alpha - 1) * (1 - scaly_thing)**(-1)
             
         t += 1
-
-
-
-def scale_param(param, scale, base, larger=True, eps=1e-10):
-    if larger:
-        out =  base + (param - base) * (1 - scale)**(-1)
-    else:
-        out =  base + (param - base) * (1 - scale)
-    return max(out, base + eps)  # make sure it's not too small - alpha=1.0 throws an error.
 
 
 def expected_node_weight_func(n, tau, alpha, d):
@@ -414,12 +364,9 @@ def compare_two_graphs(g1, g2):
 
 
 def get_largest_component(g):
-    """Return the largest connected component of g"""
-    components = nk.components.ConnectedComponents(g)
-    components.run()
-    comp_id_to_size = components.getComponentSizes()
-    largest_component = np.argmax(list(comp_id_to_size.values()))
-    return components.getComponents()[largest_component]
+    cc = nk.components.ConnectedComponents(g)
+    cc.run()
+    return cc.extractLargestConnectedComponent(g, True)
 
 
 def get_diffmap(g):
