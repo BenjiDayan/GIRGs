@@ -1,0 +1,1 @@
+find . -name "Icon?" -delete
