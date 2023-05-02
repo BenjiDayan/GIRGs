@@ -278,6 +278,18 @@ def cgirg_gen(n, d, tau, alpha, desiredAvgDegree=None, const=None, weights: Opti
 
     return gnk, edges, weights, pts, const, id2gnk
 
+def cgirg_gen_cube(n, d, tau, alpha, desiredAvgDegree=None, const=None, weights: Optional[List[float]] = None):
+    """
+    We will use the torus C library to generate a GIRG, but then restrict to a smaller cube.
+    If you want a 500 point graph with d=2, you should pass in n=2000
+    (and weights of length 2000 if needed).
+    """
+    gnk, edges, weights, pts, const, id2gnk = cgirg_gen(n, d, tau, alpha, desiredAvgDegree, const, weights)
+    pts = np.array(pts)
+    pts_mini_idxs = np.argwhere(pts.max(axis=1) < 0.5).reshape(-1)
+    pts_mini_idxs_gnk = [id2gnk[i] for i in pts_mini_idxs]
+    gnk_mini = nk.graphtools.subgraphFromNodes(gnk, pts_mini_idxs_gnk, compact=True)
+    return gnk_mini, const
 
 
 # This is a simple way to fit alpha
