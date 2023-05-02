@@ -10,7 +10,7 @@ import seaborn as sns
 from tqdm import tqdm
 import powerlaw
 
-from benji_girgs.generation import cgirg_gen, get_dists
+from benji_girgs.generation import cgirg_gen, get_dists, cgirg_gen_cube
 from benji_girgs import utils
 from benji_girgs.utils import avg_degree, get_perc_lower_common_nhbs
 
@@ -208,12 +208,7 @@ class GirgMetricFitter(GirgFitter):
                 self.fit_count += 1
 
 
-
-# degree_percentile of e.g. <0.9 is quite important, otherwise there is barely any 
-# difference in gdist - high degree nodes influence this too much.
-# Decreasing this maximally is probably good, up to the point where it's too small.
-# Ehhh. Maybe just keep as 0.9.
-def regularised_std_graph_distance(g, degree_percentile=0.9, n_samples=1000):
+def regularised_graph_distance(g, degree_percentile=0.9, n_samples=1000):
     dd = nk.centrality.DegreeCentrality(g).run().scores()
     dd = np.array(dd)
     bot_percentile_degree_indices = np.argsort(dd)[:int(degree_percentile*len(dd))]
@@ -224,8 +219,24 @@ def regularised_std_graph_distance(g, degree_percentile=0.9, n_samples=1000):
     if g_sub.numberOfNodes() < degree_percentile*0.15*len(dd):
         raise ValueError('Too many nodes removed')
     distances, std_distances, unique_dists, dist_counts = graph_distances(g_sub, n_samples)
-    # plt.hist(distances, alpha=0.5, label=f'alpha: {alpha:.3f}')
+
+    return distances, std_distances, unique_dists, dist_counts
+
+# degree_percentile of e.g. <0.9 is quite important, otherwise there is barely any 
+# difference in gdist - high degree nodes influence this too much.
+# Decreasing this maximally is probably good, up to the point where it's too small.
+# Ehhh. Maybe just keep as 0.9.
+def regularised_std_graph_distance(g, degree_percentile=0.9, n_samples=1000):
+    distances, std_distances, unique_dists, dist_counts = regularised_graph_distance(g, degree_percentile, n_samples)
     return std_distances
+
+def regularised_median_graph_distance(g, degree_percentile=0.9, n_samples=1000):
+    distances, std_distances, unique_dists, dist_counts = regularised_graph_distance(g, degree_percentile, n_samples)
+    return np.median(distances)
+
+def regularised_mean_graph_distance(g, degree_percentile=0.9, n_samples=1000):
+    distances, std_distances, unique_dists, dist_counts = regularised_graph_distance(g, degree_percentile, n_samples)
+    return np.mean(distances)
 
 # TODO is this used/needed?
 class GirgAlphaFitter(GirgMetricFitter):
@@ -298,9 +309,7 @@ def fit_cgirg(g, d, fit_percent=0.04, max_fit_steps=13, post_fit_steps=2, verbos
     and True/False whether the fit was successful. Hopefully even if the fit
     was not successful, the returned alpha and const will be close to the
     a good value?"""
-    dd = sorted(nk.centrality.DegreeCentrality(g).run().scores(), reverse=True)
-    fit = powerlaw.Fit(dd, discrete=True)
-    tau = fit.power_law.alpha
+    tau = utils.powerlaw_fit_graph(g)
 
 
     target_avg_degree = utils.avg_degree(g)
@@ -342,6 +351,27 @@ def fit_cgirg(g, d, fit_percent=0.04, max_fit_steps=13, post_fit_steps=2, verbos
     return caf.param, caf.const, tau, caf.hist, target_lcc, True
 
 
+
+
+def gp_girg_cube_fitter(g, d, tau, n_calls=30, base_estimator=None):
+    target_lcc = utils.LCC(g)
+    target_avg_degree = utils.avg_degree(g)
+    n = g.numberOfNodes() * 2 ** d
+
+    weights = girgs.generateWeights((2 ** d) * n, tau)
+    const_guess = girgs.scaleWeights(weights, target_avg_degree, d, alpha) * 1.3
+
+    def fun_to_optimise(params):
+        alpha = 1 / params[0]
+        const = np.exp(params[1]) * const_guess
+        g, _ = generation.cgirg_gen_cube(n, d, tau, alpha, const=const)
+        a, b = utils.LCC(g), target_lcc
+        x, y = utils.avg_degree(g), target_avg_degree
+        return np.log(a / b) ** 2 + 10 * np.log(x / y) ** 2
+
+    result = gp_minimize(fun_to_optimise, dimensions=[(0.01, 0.99), (-1.4, 1.4)], n_calls=n_calls, verbose=False,
+                         noise="gaussian", base_estimator=base_estimator)
+    return result
 
 class AirportGirgFitter(GirgFitter):
     n = 10317

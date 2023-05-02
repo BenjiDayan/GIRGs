@@ -3,6 +3,9 @@ import networkit as nk
 import numpy as np
 from networkit.graph import Graph
 import networkx as nx
+import sys
+import os
+import powerlaw
 
 # import os
 # if not "NO_CPP_GIRGS" in os.environ:
@@ -24,6 +27,21 @@ def LCC(g):
     lcc = nk.centrality.LocalClusteringCoefficient(g)
     lcc.run()
     return np.mean(lcc.scores())
+
+class HiddenPrints:
+    def __enter__(self):
+        self._original_stdout = sys.stdout
+        sys.stdout = open(os.devnull, 'w')
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        sys.stdout.close()
+        sys.stdout = self._original_stdout
+
+def powerlaw_fit_graph(g):
+    dd = sorted(nk.centrality.DegreeCentrality(g).run().scores(), reverse=True)
+    with HiddenPrints():
+        fit = powerlaw.Fit(dd, discrete=True)
+    return fit.power_law.alpha
 
 
 def sample_edge_stuff(g: Graph, num_edges: int):

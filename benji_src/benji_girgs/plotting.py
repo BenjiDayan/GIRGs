@@ -5,7 +5,7 @@ from networkit.graph import Graph
 
 import powerlaw
 import pandas as pd
-from benji_girgs import generation
+from benji_girgs import generation, fitting
 import seaborn as sns
 
 
@@ -82,9 +82,9 @@ def reg_std_gdist_alphas_plot(n, d, tau, alphas=[1.02, 1.08, 1.3, 1.6, 2.0], tar
     for alpha in alphas:
         print(alpha)
         for _ in range(8):
-            g, edges, weights, pts, c, id2gnk = cgirg_gen(n, d, tau, alpha, desiredAvgDegree=target_degree, weights=None)
+            g, edges, weights, pts, c, id2gnk = generation.cgirg_gen(n, d, tau, alpha, desiredAvgDegree=target_degree, weights=None)
             try:
-                std_gdist = regularised_std_graph_distance(g)
+                std_gdist = fitting.regularised_std_graph_distance(g)
                 df.loc[i] = [alpha, std_gdist]
             except ValueError:
                 pass
@@ -99,12 +99,12 @@ def reg_std_gdist_alphas_plot(n, d, tau, alphas=[1.02, 1.08, 1.3, 1.6, 2.0], tar
     sns.swarmplot(data=df, x='alpha2', y='std_gdist')
     return df
 
-def metric_func_alphas_plot(n, d, tau, target_degree, metric_func, metric_func_name, alphas=[1.02, 1.1, 1.3, 1.6, 2.0]):
+def metric_func_alphas_plot(n, d, tau, target_degree, metric_func, metric_func_name, alphas=[1.02, 1.1, 1.3, 1.6, 2.0], num_points=8):
     df = pd.DataFrame(columns=['alpha', metric_func_name])
     i=0
     for alpha in alphas:
         print(alpha)
-        for _ in range(8):
+        for _ in range(num_points):
             g, edges, weights, pts, c, id2gnk = generation.cgirg_gen(n, d, tau, alpha, desiredAvgDegree=target_degree, weights=None)
             try:
                 metric = metric_func(g)
