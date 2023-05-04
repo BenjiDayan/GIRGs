@@ -278,7 +278,7 @@ def cgirg_gen(n, d, tau, alpha, desiredAvgDegree=None, const=None, weights: Opti
 
     return gnk, edges, weights, pts, const, id2gnk
 
-def cgirg_gen_cube(n, d, tau, alpha, desiredAvgDegree=None, const=None, weights: Optional[List[float]] = None):
+def cgirg_gen_cube_subsection(n, d, tau, alpha, desiredAvgDegree=None, const=None, weights: Optional[List[float]] = None):
     """
     We will use the torus C library to generate a GIRG, but then restrict to a smaller cube.
     If you want a 500 point graph with d=2, you should pass in n=2000
@@ -291,6 +291,86 @@ def cgirg_gen_cube(n, d, tau, alpha, desiredAvgDegree=None, const=None, weights:
     gnk_mini = nk.graphtools.subgraphFromNodes(gnk, pts_mini_idxs_gnk, compact=True)
     return gnk_mini, const
 
+def cgirg_gen_cube_coupling_slow(n, d, tau, alpha, desiredAvgDegree=None, const=None, weights: Optional[List[float]] = None):
+    """This version is hopefully more efficient, and uses coupling.
+    So G is a torus GIRG, G' is a coupled cube GIRG which has a subset of the edges of G.
+    If E_uv == 0 then E'_uv == 0 as well.
+    If E_uv == 1, then
+        E'_uv =     {1 : P'_uv/ P_uv
+                    {0 : 1 - P'_uv/ P_uv
+    This is where P'_uv == P_uv mostly if r'_uv == r_uv, and P'_uv < P_uv possibly if r'_uv > r_uv, i.e. distance
+    on cube might be longer than on torus
+
+    NB this code is much slower than cgirg_gen_cube_coupling, which vectorises
+    much of the computation, but it has the same effect. I'm keeping it
+    here for reference for the moment.
+    """
+    # P_uv = min[1, c( (w_u w_v/W) / r_uv^d)^alpha]
+    # But actually we use the scaled weights, so const c disappears.
+    # P_uv = min[1, ( (w_u w_v / W) / r_uv^d)^alpha]
+    gnk, edges, weights, pts, const, id2gnk = cgirg_gen(n, d, tau, alpha, desiredAvgDegree, const, weights)
+    pts = np.array(pts)
+    weights = np.array(weights)
+    W = np.sum(weights)
+
+    for u, v in edges:
+        xu, xv = pts[u], pts[v]
+        wu, wv = weights[u], weights[v]
+        diff = np.abs(xu - xv)
+        torus_diff = np.minimum(diff, 1 - diff)
+        torus_inf_norm = torus_diff.max()
+        cube_inf_norm = diff.max()
+        p_uv = min(1, ((wu * wv / W) / torus_inf_norm**d)**alpha)
+        p_uv_cube = min(1, ((wu * wv / W) / cube_inf_norm ** d) ** alpha)
+
+        p_edge = p_uv_cube/p_uv
+        if np.random.rand() > p_edge:
+            gnk.removeEdge(id2gnk[u], id2gnk[v])
+
+    return gnk
+
+def cgirg_gen_cube_coupling(n, d, tau, alpha, desiredAvgDegree=None, const=None, weights: Optional[List[float]] = None):
+    """This version is hopefully more efficient, and uses coupling.
+    So G is a torus GIRG, G' is a coupled cube GIRG which has a subset of the edges of G.
+    If E_uv == 0 then E'_uv == 0 as well.
+    If E_uv == 1, then
+        E'_uv =     {1 : P'_uv/ P_uv
+                    {0 : 1 - P'_uv/ P_uv
+    This is where P'_uv == P_uv mostly if r'_uv == r_uv, and P'_uv < P_uv possibly if r'_uv > r_uv, i.e. distance
+    on cube might be longer than on torus
+    """
+    # P_uv = min[1, c( (w_u w_v/W) / r_uv^d)^alpha]
+    # But actually we use the scaled weights, so const c disappears.
+    # P_uv = min[1, ( (w_u w_v / W) / r_uv^d)^alpha]
+    gnk, edges, weights, pts, const, id2gnk = cgirg_gen(n, d, tau, alpha, desiredAvgDegree, const, weights)
+
+    edges = np.array(edges)
+    pts = np.array(pts)
+    weights = np.array(weights)
+    W = np.sum(weights)
+
+    u, v = edges[:, 0], edges[:, 1]
+    xu, xv = pts[u], pts[v]
+    wu, wv = weights[u], weights[v]
+
+    diff = np.abs(xu - xv)
+    torus_diff = np.stack([diff, 1 - diff]).min(axis=0)
+    torus_inf_norm = torus_diff.max(axis=1)
+    cube_inf_norm = diff.max(axis=1)
+
+    puv = np.stack([np.ones(cube_inf_norm.shape), ((wu * wv / W) / torus_inf_norm ** d) ** alpha]).min(axis=0)
+    puv_cube = np.stack([np.ones(cube_inf_norm.shape), ((wu * wv / W) / cube_inf_norm ** d) ** alpha]).min(axis=0)
+
+    samples = np.random.uniform(size=cube_inf_norm.shape)
+    to_remove = samples > puv_cube / puv
+
+    for u, v in edges[to_remove]:
+        gnk.removeEdge(id2gnk[u], id2gnk[v])
+
+    return gnk
+
+
+cgirg_gen_cube = cgirg_gen_cube_coupling
 
 # This is a simple way to fit alpha
 def fit_girg_alpha(g_true: nk.Graph, d, tau, num_edges=6000):

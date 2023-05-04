@@ -6,13 +6,16 @@ from networkit.graph import Graph
 import networkx as nx
 import pandas as pd
 import seaborn as sns
+import scipy
 
 from tqdm import tqdm
 import powerlaw
 
-from benji_girgs.generation import cgirg_gen, get_dists, cgirg_gen_cube
+from benji_girgs import generation
 from benji_girgs import utils
 from benji_girgs.utils import avg_degree, get_perc_lower_common_nhbs
+
+import skopt
 
 # import os
 # if not "NO_CPP_GIRGS" in os.environ:
@@ -334,7 +337,7 @@ def fit_cgirg(g, d, fit_percent=0.04, max_fit_steps=13, post_fit_steps=2, verbos
 
 
     def girg_and_const_gen_func(alpha):
-        g, edges, weights, pts, c, id2gnk = cgirg_gen(n, d, tau, alpha, desiredAvgDegree=target_avg_degree, weights=None)
+        g, edges, weights, pts, c, id2gnk = generation.cgirg_gen(n, d, tau, alpha, desiredAvgDegree=target_avg_degree, weights=None)
         return g, c
 
     caf = CGirgAlphaFitter(target_lcc, target_avg_degree, girg_and_const_gen_func)
@@ -351,15 +354,18 @@ def fit_cgirg(g, d, fit_percent=0.04, max_fit_steps=13, post_fit_steps=2, verbos
     return caf.param, caf.const, tau, caf.hist, target_lcc, True
 
 
-
+#### NB! gp_girg_cube_fitter is actually slower I think than our binary searching
+# I've not much tested scipy_lbfgs_girg_cube_fitter, but I think any attempt it might
+# use to compute the function gradient via finite differences in order to speed up
+# optimisation is probably foiled by the noisiness of our function
 
 def gp_girg_cube_fitter(g, d, tau, n_calls=30, base_estimator=None):
     target_lcc = utils.LCC(g)
     target_avg_degree = utils.avg_degree(g)
     n = g.numberOfNodes() * 2 ** d
 
-    weights = girgs.generateWeights((2 ** d) * n, tau)
-    const_guess = girgs.scaleWeights(weights, target_avg_degree, d, alpha) * 1.3
+    weights = girgs.generateWeights(n, tau)
+    const_guess = girgs.scaleWeights(weights, target_avg_degree, d, 1.5) * 1.3
 
     def fun_to_optimise(params):
         alpha = 1 / params[0]
@@ -369,8 +375,40 @@ def gp_girg_cube_fitter(g, d, tau, n_calls=30, base_estimator=None):
         x, y = utils.avg_degree(g), target_avg_degree
         return np.log(a / b) ** 2 + 10 * np.log(x / y) ** 2
 
-    result = gp_minimize(fun_to_optimise, dimensions=[(0.01, 0.99), (-1.4, 1.4)], n_calls=n_calls, verbose=False,
+    result = skopt.gp_minimize(fun_to_optimise, dimensions=[(0.01, 0.99), (-1.4, 1.4)], n_calls=n_calls, verbose=False,
                          noise="gaussian", base_estimator=base_estimator)
+    return result
+
+def scipy_lbfgs_girg_cube_fitter(g, d, tau):
+    target_lcc = utils.LCC(g)
+    target_avg_degree = utils.avg_degree(g)
+    n = g.numberOfNodes()
+
+    weights = girgs.generateWeights(n, tau)
+    # the scaling constant gets bigger with increasing alpah
+    # to have the same target_avg_degree, cube girgs need higher c as they lose edges
+    weights = girgs.generateWeights(n, tau)
+    target_avg_degree = 20.0
+
+    c_0 = girgs.scaleWeights(weights, target_avg_degree, d, 1 / 0.99)
+    c_1 = girgs.scaleWeights(weights, target_avg_degree, d, 1 / 0.01) * 20
+    c_0log, c_1log = np.log(c_0), np.log(c_1)
+    c_log_diff = 0.5*(c_1log - c_0log)
+    c_mid = np.exp(0.5 * (c_1log + c_0log))
+
+    def fun_to_optimise(params):
+        alpha = 1 / params[0]
+        const = np.exp(params[1]) * c_mid
+        g = generation.cgirg_gen_cube(n, d, tau, alpha, const=const)
+        a, b = utils.LCC(g), target_lcc
+        x, y = utils.avg_degree(g), target_avg_degree
+        return np.log(a / b) ** 2 + 10 * np.log(x / y) ** 2
+
+    result = scipy.optimize.minimize(
+        fun_to_optimise,
+        x0=np.array([0.5, 0.0]),
+        bounds=[(0.01, 0.99), (-c_log_diff, c_log_diff)],
+        method='L-BFGS-B')
     return result
 
 class AirportGirgFitter(GirgFitter):
