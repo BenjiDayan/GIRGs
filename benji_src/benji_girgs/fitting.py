@@ -337,7 +337,7 @@ def fit_cgirg(g, d, fit_percent=0.04, max_fit_steps=13, post_fit_steps=2, verbos
 
 
     def girg_and_const_gen_func(alpha):
-        g, edges, weights, pts, c, id2gnk = generation.cgirg_gen(n, d, tau, alpha, desiredAvgDegree=target_avg_degree, weights=None)
+        g, edges, weights, pts, c = generation.cgirg_gen(n, d, tau, alpha, desiredAvgDegree=target_avg_degree, weights=None)
         return g, c
 
     caf = CGirgAlphaFitter(target_lcc, target_avg_degree, girg_and_const_gen_func)

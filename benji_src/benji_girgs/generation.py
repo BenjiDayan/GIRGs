@@ -13,121 +13,16 @@ except Exception:
 from typing import List, Optional, Tuple, Union
 import random
 
-import powerlaw
 import os
 
-from julia.api import Julia
-jl_temp = Julia(compiled_modules=False)
-from julia import Main as jl
-file_path = os.path.dirname(os.path.abspath(__file__)) + '/benji_jl_dists.jl'
-jl.file_path = file_path
-jl.eval('include(file_path)')
 
 
-from scipy.spatial.distance import pdist, squareform
+from benji_girgs.points import Points, PointsTorus, PointsCube
 
-
-class Points(np.ndarray):
-    """
-    Base Class for (n, d) array of points.
-    """
-    def dists(self) -> np.ndarray:
-        """
-        Returns an (n,n) matrix of distances between points
-        """
-        pass
-class PointsTorus(Points):
-    def __new__(cls, input_array):
-        # Input array is an already formed ndarray instance
-        # We first cast to be our class type
-        obj = np.asarray(input_array).view(cls)
-        # Finally, we must return the newly created object:
-        return obj
-
-    def dists(self):
-        return get_dists_julia(self)
-    
-class PointsCube(Points):
-    def __new__(cls, input_array):
-        # Input array is an already formed ndarray instance
-        # We first cast to be our class type
-        obj = np.asarray(input_array).view(cls)
-        # Finally, we must return the newly created object:
-        return obj
-
-    def dists(self):
-        return get_dists_cube(self)
-
-########## NB
-# For PointsMCD and PointsSimpleMixed, we actually exponentiate the distances
-# by 1/d. This is because in get_probs, each distance r_uv is raised to the power
-# of d. So we need to undo that here, since V_min(r_uv) := r_uv. (This is actually
-# a simplification, it's actually 2r <= 1 - (1 - 2r)^d <= 2dr in the paper, which
-# they then simplify to just r (as we do here).)
-#
-# note that the formula P(A u B u C) = 1 - (1-2r)^3 for d=3 e.g. comes from
-# P(A u B u C) = P( (A^c n B^c n C^c)^c ) = 1 - P(A^c n B^c n C^c)
-# = 1 - P(A^c)P(B^c)P(C^c) = 1 - (1-2r)^3
-#
-# However our codebase throughout actualy samples from the n**(1/d) side length torus.
-# Hence we'd need to replace 1 - (1-2r)^d => n - (n^(1/d) - 2r)^d ~= n^[(d-1)/d] r I guess?
-# This kind of makes sense:
-#   previously r^d --(r=n^(1/d))-> n = Vol(Torus)
-#   now, n^[(d-1)/d] r --(r=n^(1/d))-> n^[(d-1)/d] n^(1/d) = n
-#
-# We could also derive this from the formula from one section: (2r) * (n^(1/d))^(d-1).
-# The intersection of d of these planes has volume basically (2dr) * (n^(1/d))^(d-1),
-# which we then scale down to just r * (n^(1/d))^(d-1) = n^[(d-1)/d] r.
-#
-# This gives us the volume for a Min Max mix:
-# So if we group the d dimensions into a1, a2, ..., ak disjoint groups, then the volume
-# Vol(r) = n - Prod_{i=1}^k (n^(|a_i|/d) - (2r)^|a_i|) =
-#
-# I think we'd best use this full formula throughout for consistency
-class PointsMCD(Points):
-
-    def __new__(cls, input_array):
-        obj = np.asarray(input_array).view(cls)
-        return obj
-
-    def dists(self):
-        n, d = self.shape
-        r = get_dists_mcd(self)
-        # return (n**((d-1)/d) * r)**(1/d)
-        out = n - (n**(1/d) - 2*r)**d
-        return out**(1/d)
-def get_points_simple_mixed_class(groups):
-    """
-    E.g. if groups = [[0], [1,2]]
-    We get a Min(diff0, Max(diff1, diff2)) distance for absolue torus distances.
-
-    """
-    class PointsSimpleMixed(Points):
-        my_groups = groups
-        def __new__(cls, input_array):
-            obj = np.asarray(input_array).view(cls)
-            return obj
-
-        def dists(self):
-            n, d = self.shape
-            r = get_dists_mixed(self, self.my_groups)
-            prod = 1
-            for group in self.my_groups:
-                prod *= (n**(len(group)/d) - (2*r)**len(group))
-            out = n - prod
-            return out**(1/d)
-
-    return PointsSimpleMixed
-
-
-# class PointsSimpleMixed(Points):
-#     def __new__(cls, input_array):
-#         obj = np.asarray(input_array).view(cls)
-#         return obj
-#
-#     def dists(self):
-#         return get_dists_simple_mixed(self)
-
+def torus_uniform(d: int = 2, n: int = 1000) -> np.ndarray:
+    """uniformly sample from the torus"""
+    torus_side_length = n**(1/d)
+    return np.random.uniform(high=torus_side_length, size=(n, d))
 
 
 def powerlaw_dist(tau=2.5, x_min=1, n=1000):
@@ -140,101 +35,6 @@ def powerlaw_dist(tau=2.5, x_min=1, n=1000):
     a = tau-1
     pareto = (np.random.pareto(a, size=n) + 1) * x_min
     return pareto
-
-
-def torus_uniform(d: int = 2, n: int = 1000) -> np.ndarray:
-    """uniformly sample from the torus"""
-    torus_side_length = n**(1/d)
-    return np.random.uniform(high=torus_side_length, size=(n, d))
-
-
-
-    
-# very slow non vectorised
-def get_dists_old(torus_points: np.ndarray, torus_side_length):
-    """
-    torus_points: (n x d) array of points
-    """
-    dists = pdist(torus_points, 
-              lambda a,b: np.linalg.norm(get_torus_path(a, b, torus_side_length), ord=np.inf))
-    return squareform(dists)
-
-# lots of extra memory
-def get_dists2(torus_points: np.ndarray, torus_side_length):
-    """
-    torus_points: (n x d) array of points
-    """
-    n = len(torus_points)
-    lpts = np.tile(torus_points, (n,1))
-    rpts = np.repeat(torus_points, n, axis=0)
-    diff = np.abs(rpts - lpts)
-    torus_diff = np.minimum(diff, torus_side_length - diff)
-    dists = np.linalg.norm(torus_diff, ord=np.inf, axis=1)
-    return dists.reshape(n, n)
-
-# Minimal extra memory
-# This one seems hella faster
-def get_dists(torus_points: np.ndarray, torus_side_length):
-    diff = np.abs(torus_points[:, None, :] - torus_points[None, :, :])
-    torus_diff = np.minimum(diff, torus_side_length - diff)
-    dists = np.linalg.norm(torus_diff, ord=np.inf, axis=-1)
-    return dists
-
-# Fastest is julia version of Minimal extra memory
-def get_dists_julia(torus_points: np.ndarray, n=None, d=None):
-    torus_points = torus_points.astype(np.float16)
-    # jl.get_dists_novars automatically converts torus_side_length to match
-    # same eltype as torus_points
-    n = n if n is not None else torus_points.shape[0]
-    d = d if d is not None else torus_points.shape[1]
-    torus_side_length = n**(1/d)
-    return jl.get_dists_novars(torus_points, torus_side_length)
-
-
-def get_dists_cube(points: np.ndarray):
-    return np.linalg.norm(points[:, None, :] - points[None, :, :], ord=np.inf, axis=-1)
-
-def get_dists_mcd(points: np.ndarray):
-    # return np.min(np.abs(points[:, None, :] - points[None, :, :]), axis=-1)
-    points = points.astype(np.float16)
-    n, d = points.shape
-    torus_side_length = n**(1/d)
-    return jl.get_dists_novars_min(points, torus_side_length)
-
-
-# def get_dists_mcd2(points: np.ndarray):
-#     # return np.min(np.abs(points[:, None, :] - points[None, :, :]), axis=-1)
-#     points = points.astype(np.float16)
-#     n, d = points.shape
-#     torus_side_length = np.float16(n**(1/d))
-#
-#     diff = np.abs.(pts[:, None, :] - pts[None, :, :])
-#     torus_diff = min.(diff, torus_side_length. - diff)
-#     dists = minimum(torus_diff, dims=3)
-#     return reshape(dists, (n, n))
-#
-#
-#     return jl.get_dists_novars_min(points, torus_side_length)
-
-
-def get_dists_mixed(points: np.ndarray, groups: List[List[int]]):
-    """E.g. groups = [[0], [1, 2], [0, 3], ...] means take
-    Min(
-        Max(|z_0 - z_0'|),
-        Max(|z_1 - z_1'|, |z_2 - z_2'|),
-        Max(|z_0 - z_0'|, |z_3 - z_3'|),
-        ...
-    )"""
-    d = points.shape[1]
-    out = get_dists_julia(points[:, groups[0]])
-    for group in groups[1:]:
-        out = np.minimum(out, get_dists_julia(points[:, group], d=d))
-    return out
-
-def get_torus_path(a, b, torus_side_length):
-    """Returns "b - a" in minimal torus path"""
-    dist1, dist2 = b-a, (torus_side_length-np.abs(b-a))*(-np.sign(b-a))
-    return np.where(np.abs(dist1) < np.abs(dist2), dist1, dist2)
 
 
 def quick_seed(seed: Union[None, int]):
@@ -252,7 +52,7 @@ def generatePositions(
     n: int, dimension: int, *, seed: int = None
 ) -> np.ndarray:
     np.random.seed(quick_seed(seed))
-    return torus_uniform(dimension, n)
+    return np.random.uniform(size=(n, dimension))
 
 
 def get_probs(weights: List[float], pts: Points, alpha=2.0, const=1.0):
@@ -268,7 +68,8 @@ def get_probs(weights: List[float], pts: Points, alpha=2.0, const=1.0):
     p_uv = np.minimum(const * p_uv, 1)
     return p_uv
 
-
+################# NB The below note is now deprecated as I changed Torus points in general to be in a cube of side
+# length 1 rather than n^(1/d). This is because the CGIRG code does this and it makes it easier to compare.
 ########  NB in order to match up with the CGIRGs we need to do something like this:
 # i.e. we have to adjust our code to 1: scale pts by wbar**(1/d)
 # note get_probs function uses a build in torus side length calculation so that
@@ -346,7 +147,15 @@ def upper_triangular_to_edgelist_fastest(mat: np.ndarray) -> List[Tuple[int, int
     """Converts an upper triangular matrix to an edgelist, fastest possible"""
     return list(zip(*np.nonzero(mat)))
 
- 
+
+def edge_list_to_nk_graph(edge_list: List[Tuple[int, int]], n) -> Graph:
+    g = nk.Graph(n)
+    for u, v in edge_list:
+        g.addEdge(u, v)
+
+    return g
+
+
 def generate_GIRG_nk(n, d, tau, alpha, const=1.0, points_type=PointsTorus):
     """Generate a GIRG of n vertices, with power law exponent tau, dimension d
     and alpha """
@@ -354,39 +163,14 @@ def generate_GIRG_nk(n, d, tau, alpha, const=1.0, points_type=PointsTorus):
     # works fine from an upper triangular matrix (with zeros on the diagonal)
     # so all good!
     weights = generateWeights(n, tau)
+    weights = weights / np.sqrt(np.sum(weights))
     pts = generatePositions(n, d)
     pts = points_type(pts)
-    edges = generateEdges(weights, pts, alpha, const=const)
-    # num_edges = edges.sum()
-    # edges = edges + edges.T
-    # edge_list = upper_triangular_to_edgelist_fastest(edges)
-
-    # write edge_list to a temporary file
-    with open("temp.txt", "w") as f:
-        for u, v in zip(*np.nonzero(edges)):
-            f.write(f"{u} {v}\n")
-
-    ### Remove this attempt to do a METIS file - needing number of edges was bad?
-    # write edge_list to a temporary file, one line per node
-    # so
-    # 1 3 5 10 20\n
-    # 5 6\n
-    # ...
-    # means node 0 has edges to 1, 3, 5, 10, 20; node 1 has edges to 5, 6 etc.
-    # with open("temp.txt", "w") as f:
-    #     for i in range(n):
-    #         f.write(f"{n} {num_edges}\n")
-    #         f.write(" ".join(map(str, np.nonzero(edges[i])[0])) + "\n")
-
-
-    # read it in with networkit
-    g = nk.readGraph("temp.txt", nk.Format.EdgeListSpaceZero)
-    # g = nk.readGraph("temp.txt", nk.Format.METIS)
-    # delete the temporary file
-    os.remove("temp.txt")
+    adj_mat = generateEdges(weights, pts, alpha, const=const)
 
     # g = nk.nxadapter.nx2nk(nx.from_numpy_array(edges))
-    return g, edges, weights, pts
+    g = edge_list_to_nk_graph(zip(*np.nonzero(adj_mat)), n)
+    return g, adj_mat, weights, pts
 
 
 
@@ -411,19 +195,10 @@ def cgirg_gen(n, d, tau, alpha, desiredAvgDegree=None, const=None, weights: Opti
         
     pts = girgs.generatePositions(n, d)
     edges = girgs.generateEdges(scaled_weights, pts, alpha)
-    # Make graph from edge list (not adjacency matrix)
-    gnx = nx.from_edgelist(edges)
-    missing_nodes = set(list(range(n)))
-    for node in gnx.nodes:
-        missing_nodes.remove(node)
-    
-    for missing_node in missing_nodes:
-        gnx.add_node(missing_node)
+    # Make graph from edge list
+    g = edge_list_to_nk_graph(edges, n)
 
-    gnk = nk.nxadapter.nx2nk(gnx)
-    id2gnk = dict((gnx_id, gnk_id) for (gnx_id, gnk_id) in zip(gnx.nodes(), range(gnx.number_of_nodes())))
-
-    return gnk, edges, weights, pts, const, id2gnk
+    return g, edges, weights, pts, const
 
 def cgirg_gen_cube_subsection(n, d, tau, alpha, desiredAvgDegree=None, const=None, weights: Optional[List[float]] = None):
     """
@@ -431,11 +206,10 @@ def cgirg_gen_cube_subsection(n, d, tau, alpha, desiredAvgDegree=None, const=Non
     If you want a 500 point graph with d=2, you should pass in n=2000
     (and weights of length 2000 if needed).
     """
-    gnk, edges, weights, pts, const, id2gnk = cgirg_gen(n, d, tau, alpha, desiredAvgDegree, const, weights)
+    gnk, edges, weights, pts, const = cgirg_gen(n, d, tau, alpha, desiredAvgDegree, const, weights)
     pts = np.array(pts)
     pts_mini_idxs = np.argwhere(pts.max(axis=1) < 0.5).reshape(-1)
-    pts_mini_idxs_gnk = [id2gnk[i] for i in pts_mini_idxs]
-    gnk_mini = nk.graphtools.subgraphFromNodes(gnk, pts_mini_idxs_gnk, compact=True)
+    gnk_mini = nk.graphtools.subgraphFromNodes(gnk, pts_mini_idxs, compact=True)
     return gnk_mini, const
 
 def cgirg_gen_cube_coupling_slow(n, d, tau, alpha, desiredAvgDegree=None, const=None, weights: Optional[List[float]] = None):
@@ -455,7 +229,7 @@ def cgirg_gen_cube_coupling_slow(n, d, tau, alpha, desiredAvgDegree=None, const=
     # P_uv = min[1, c( (w_u w_v/W) / r_uv^d)^alpha]
     # But actually we use the scaled weights, so const c disappears.
     # P_uv = min[1, ( (w_u w_v / W) / r_uv^d)^alpha]
-    gnk, edges, weights, pts, const, id2gnk = cgirg_gen(n, d, tau, alpha, desiredAvgDegree, const, weights)
+    gnk, edges, weights, pts, const = cgirg_gen(n, d, tau, alpha, desiredAvgDegree, const, weights)
     pts = np.array(pts)
     weights = np.array(weights)
     W = np.sum(weights)
@@ -472,7 +246,7 @@ def cgirg_gen_cube_coupling_slow(n, d, tau, alpha, desiredAvgDegree=None, const=
 
         p_edge = p_uv_cube/p_uv
         if np.random.rand() > p_edge:
-            gnk.removeEdge(id2gnk[u], id2gnk[v])
+            gnk.removeEdge(u, v)
 
     return gnk
 
@@ -489,7 +263,7 @@ def cgirg_gen_cube_coupling(n, d, tau, alpha, desiredAvgDegree=None, const=None,
     # P_uv = min[1, c( (w_u w_v/W) / r_uv^d)^alpha]
     # But actually we use the scaled weights, so const c disappears.
     # P_uv = min[1, ( (w_u w_v / W) / r_uv^d)^alpha]
-    gnk, edges, weights, pts, const, id2gnk = cgirg_gen(n, d, tau, alpha, desiredAvgDegree, const, weights)
+    gnk, edges, weights, pts, const = cgirg_gen(n, d, tau, alpha, desiredAvgDegree, const, weights)
 
     edges = np.array(edges)
     pts = np.array(pts)
@@ -512,7 +286,7 @@ def cgirg_gen_cube_coupling(n, d, tau, alpha, desiredAvgDegree=None, const=None,
     to_remove = samples > puv_cube / puv
 
     for u, v in edges[to_remove]:
-        gnk.removeEdge(id2gnk[u], id2gnk[v])
+        gnk.removeEdge(u, v)
 
     return gnk
 

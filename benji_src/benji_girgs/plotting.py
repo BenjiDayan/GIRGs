@@ -82,7 +82,7 @@ def reg_std_gdist_alphas_plot(n, d, tau, alphas=[1.02, 1.08, 1.3, 1.6, 2.0], tar
     for alpha in alphas:
         print(alpha)
         for _ in range(8):
-            g, edges, weights, pts, c, id2gnk = generation.cgirg_gen(n, d, tau, alpha, desiredAvgDegree=target_degree, weights=None)
+            g, edges, weights, pts, c = generation.cgirg_gen(n, d, tau, alpha, desiredAvgDegree=target_degree, weights=None)
             try:
                 std_gdist = fitting.regularised_std_graph_distance(g)
                 df.loc[i] = [alpha, std_gdist]
@@ -105,7 +105,7 @@ def metric_func_alphas_plot(n, d, tau, target_degree, metric_func, metric_func_n
     for alpha in alphas:
         print(alpha)
         for _ in range(num_points):
-            g, edges, weights, pts, c, id2gnk = generation.cgirg_gen(n, d, tau, alpha, desiredAvgDegree=target_degree, weights=None)
+            g, edges, weights, pts, c = generation.cgirg_gen(n, d, tau, alpha, desiredAvgDegree=target_degree, weights=None)
             try:
                 metric = metric_func(g)
                 df.loc[i] = [alpha, metric]

@@ -35,15 +35,29 @@ end
 #     return output
 # end
 
-function get_dists_novars(pts::Matrix, torus_side_length)
-    torus_side_length = convert(eltype(pts), torus_side_length)
+
+
+###### We updated these two that are used to ditch torus_side_length - it's bow sipmler
+function get_dists_novars(pts::Matrix)
 	n = size(pts)[1]
     d = size(pts)[2]
 	diff = abs.(reshape(pts, (n, 1, d)) .- reshape(pts, (1, n, d)))
-	torus_diff = min.(diff, torus_side_length .- diff)
+	torus_diff = min.(diff, 1 .- diff)
 	dists = maximum(torus_diff, dims=3)
 	return reshape(dists, (n, n))
 end
+
+# This is the MCD version of the above
+function get_dists_novars_min(pts::Matrix)
+	n = size(pts)[1]
+    d = size(pts)[2]
+	diff = abs.(reshape(pts, (n, 1, d)) .- reshape(pts, (1, n, d)))
+	torus_diff = min.(diff, 1 .- diff)
+	dists = minimum(torus_diff, dims=3)
+	return reshape(dists, (n, n))
+end
+
+####################################
 
 
 # julia> n = 10000; d = 3; @time get_dists2(convert(Matrix{Float16}, rand(n, d)),Float16[n^(1/d)]);
