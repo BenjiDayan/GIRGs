@@ -58,6 +58,76 @@ class PointsCube(Points):
     def dists(self):
         return get_dists_cube(self)
 
+########## NB
+# For PointsMCD and PointsSimpleMixed, we actually exponentiate the distances
+# by 1/d. This is because in get_probs, each distance r_uv is raised to the power
+# of d. So we need to undo that here, since V_min(r_uv) := r_uv. (This is actually
+# a simplification, it's actually 2r <= 1 - (1 - 2r)^d <= 2dr in the paper, which
+# they then simplify to just r (as we do here).)
+#
+# note that the formula P(A u B u C) = 1 - (1-2r)^3 for d=3 e.g. comes from
+# P(A u B u C) = P( (A^c n B^c n C^c)^c ) = 1 - P(A^c n B^c n C^c)
+# = 1 - P(A^c)P(B^c)P(C^c) = 1 - (1-2r)^3
+#
+# However our codebase throughout actualy samples from the n**(1/d) side length torus.
+# Hence we'd need to replace 1 - (1-2r)^d => n - (n^(1/d) - 2r)^d ~= n^[(d-1)/d] r I guess?
+# This kind of makes sense:
+#   previously r^d --(r=n^(1/d))-> n = Vol(Torus)
+#   now, n^[(d-1)/d] r --(r=n^(1/d))-> n^[(d-1)/d] n^(1/d) = n
+#
+# We could also derive this from the formula from one section: (2r) * (n^(1/d))^(d-1).
+# The intersection of d of these planes has volume basically (2dr) * (n^(1/d))^(d-1),
+# which we then scale down to just r * (n^(1/d))^(d-1) = n^[(d-1)/d] r.
+#
+# This gives us the volume for a Min Max mix:
+# So if we group the d dimensions into a1, a2, ..., ak disjoint groups, then the volume
+# Vol(r) = n - Prod_{i=1}^k (n^(|a_i|/d) - (2r)^|a_i|) =
+#
+# I think we'd best use this full formula throughout for consistency
+class PointsMCD(Points):
+
+    def __new__(cls, input_array):
+        obj = np.asarray(input_array).view(cls)
+        return obj
+
+    def dists(self):
+        n, d = self.shape
+        r = get_dists_mcd(self)
+        # return (n**((d-1)/d) * r)**(1/d)
+        out = n - (n**(1/d) - 2*r)**d
+        return out**(1/d)
+def get_points_simple_mixed_class(groups):
+    """
+    E.g. if groups = [[0], [1,2]]
+    We get a Min(diff0, Max(diff1, diff2)) distance for absolue torus distances.
+
+    """
+    class PointsSimpleMixed(Points):
+        my_groups = groups
+        def __new__(cls, input_array):
+            obj = np.asarray(input_array).view(cls)
+            return obj
+
+        def dists(self):
+            n, d = self.shape
+            r = get_dists_mixed(self, self.my_groups)
+            prod = 1
+            for group in self.my_groups:
+                prod *= (n**(len(group)/d) - (2*r)**len(group))
+            out = n - prod
+            return out**(1/d)
+
+    return PointsSimpleMixed
+
+
+# class PointsSimpleMixed(Points):
+#     def __new__(cls, input_array):
+#         obj = np.asarray(input_array).view(cls)
+#         return obj
+#
+#     def dists(self):
+#         return get_dists_simple_mixed(self)
+
 
 
 def powerlaw_dist(tau=2.5, x_min=1, n=1000):
@@ -72,7 +142,7 @@ def powerlaw_dist(tau=2.5, x_min=1, n=1000):
     return pareto
 
 
-def torus_uniform(d: int=2, n: int=1000) -> np.ndarray:
+def torus_uniform(d: int = 2, n: int = 1000) -> np.ndarray:
     """uniformly sample from the torus"""
     torus_side_length = n**(1/d)
     return np.random.uniform(high=torus_side_length, size=(n, d))
@@ -111,11 +181,12 @@ def get_dists(torus_points: np.ndarray, torus_side_length):
     return dists
 
 # Fastest is julia version of Minimal extra memory
-def get_dists_julia(torus_points: np.ndarray):
+def get_dists_julia(torus_points: np.ndarray, n=None, d=None):
     torus_points = torus_points.astype(np.float16)
     # jl.get_dists_novars automatically converts torus_side_length to match
     # same eltype as torus_points
-    n, d = torus_points.shape
+    n = n if n is not None else torus_points.shape[0]
+    d = d if d is not None else torus_points.shape[1]
     torus_side_length = n**(1/d)
     return jl.get_dists_novars(torus_points, torus_side_length)
 
@@ -123,7 +194,42 @@ def get_dists_julia(torus_points: np.ndarray):
 def get_dists_cube(points: np.ndarray):
     return np.linalg.norm(points[:, None, :] - points[None, :, :], ord=np.inf, axis=-1)
 
+def get_dists_mcd(points: np.ndarray):
+    # return np.min(np.abs(points[:, None, :] - points[None, :, :]), axis=-1)
+    points = points.astype(np.float16)
+    n, d = points.shape
+    torus_side_length = n**(1/d)
+    return jl.get_dists_novars_min(points, torus_side_length)
 
+
+# def get_dists_mcd2(points: np.ndarray):
+#     # return np.min(np.abs(points[:, None, :] - points[None, :, :]), axis=-1)
+#     points = points.astype(np.float16)
+#     n, d = points.shape
+#     torus_side_length = np.float16(n**(1/d))
+#
+#     diff = np.abs.(pts[:, None, :] - pts[None, :, :])
+#     torus_diff = min.(diff, torus_side_length. - diff)
+#     dists = minimum(torus_diff, dims=3)
+#     return reshape(dists, (n, n))
+#
+#
+#     return jl.get_dists_novars_min(points, torus_side_length)
+
+
+def get_dists_mixed(points: np.ndarray, groups: List[List[int]]):
+    """E.g. groups = [[0], [1, 2], [0, 3], ...] means take
+    Min(
+        Max(|z_0 - z_0'|),
+        Max(|z_1 - z_1'|, |z_2 - z_2'|),
+        Max(|z_0 - z_0'|, |z_3 - z_3'|),
+        ...
+    )"""
+    d = points.shape[1]
+    out = get_dists_julia(points[:, groups[0]])
+    for group in groups[1:]:
+        out = np.minimum(out, get_dists_julia(points[:, group], d=d))
+    return out
 
 def get_torus_path(a, b, torus_side_length):
     """Returns "b - a" in minimal torus path"""
@@ -224,12 +330,25 @@ def generateEdges(
     # upper triangular matrix - lower half and the diagonal zeroed
     # Since we want only one coin flip per (i, j) edge not two different
     # coin flips that could give different outputs
-    return np.triu((unif_mat < probs).astype(np.uint), 1)
-    
+    # return np.triu((unif_mat < probs).astype(np.uint), 1)
+    return np.triu((unif_mat < probs), 1)
+
+
+def upper_triangular_to_edgelist(mat: np.ndarray) -> List[Tuple[int, int]]:
+    """Converts an upper triangular matrix to an edgelist"""
+    return [(i, j) for i, j in zip(*np.triu_indices_from(mat, 1)) if mat[i, j] > 0]
+
+def upper_triangular_to_edgelist_faster(mat: np.ndarray) -> List[Tuple[int, int]]:
+    """Converts an upper triangular matrix to an edgelist, very fast"""
+    return np.argwhere(mat > 0).tolist()
+
+def upper_triangular_to_edgelist_fastest(mat: np.ndarray) -> List[Tuple[int, int]]:
+    """Converts an upper triangular matrix to an edgelist, fastest possible"""
+    return list(zip(*np.nonzero(mat)))
 
  
 def generate_GIRG_nk(n, d, tau, alpha, const=1.0, points_type=PointsTorus):
-    """Generate a GIRG of n vertices, with power law exponent tau, dimesion d
+    """Generate a GIRG of n vertices, with power law exponent tau, dimension d
     and alpha """
     # nx.from_numpy_matrix goes from an adjacency matrix. It actually
     # works fine from an upper triangular matrix (with zeros on the diagonal)
@@ -238,7 +357,35 @@ def generate_GIRG_nk(n, d, tau, alpha, const=1.0, points_type=PointsTorus):
     pts = generatePositions(n, d)
     pts = points_type(pts)
     edges = generateEdges(weights, pts, alpha, const=const)
-    g = nk.nxadapter.nx2nk(nx.from_numpy_array(edges))
+    # num_edges = edges.sum()
+    # edges = edges + edges.T
+    # edge_list = upper_triangular_to_edgelist_fastest(edges)
+
+    # write edge_list to a temporary file
+    with open("temp.txt", "w") as f:
+        for u, v in zip(*np.nonzero(edges)):
+            f.write(f"{u} {v}\n")
+
+    ### Remove this attempt to do a METIS file - needing number of edges was bad?
+    # write edge_list to a temporary file, one line per node
+    # so
+    # 1 3 5 10 20\n
+    # 5 6\n
+    # ...
+    # means node 0 has edges to 1, 3, 5, 10, 20; node 1 has edges to 5, 6 etc.
+    # with open("temp.txt", "w") as f:
+    #     for i in range(n):
+    #         f.write(f"{n} {num_edges}\n")
+    #         f.write(" ".join(map(str, np.nonzero(edges[i])[0])) + "\n")
+
+
+    # read it in with networkit
+    g = nk.readGraph("temp.txt", nk.Format.EdgeListSpaceZero)
+    # g = nk.readGraph("temp.txt", nk.Format.METIS)
+    # delete the temporary file
+    os.remove("temp.txt")
+
+    # g = nk.nxadapter.nx2nk(nx.from_numpy_array(edges))
     return g, edges, weights, pts
 
 
