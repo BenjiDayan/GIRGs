@@ -17,7 +17,7 @@ import os
 
 
 
-from benji_girgs.points import Points, PointsTorus, PointsCube
+from benji_girgs.points import Points, PointsTorus, PointsCube, PointsMCD, PointsTorus2, PointsTrue
 
 def torus_uniform(d: int = 2, n: int = 1000) -> np.ndarray:
     """uniformly sample from the torus"""
@@ -156,21 +156,42 @@ def edge_list_to_nk_graph(edge_list: List[Tuple[int, int]], n) -> Graph:
     return g
 
 
-def generate_GIRG_nk(n, d, tau, alpha, const=1.0, points_type=PointsTorus):
+def generate_GIRG_nk(n, d, tau, alpha, desiredAvgDegree=None, const=None, weights: Optional[np.ndarray] = None, points_type=PointsTorus):
     """Generate a GIRG of n vertices, with power law exponent tau, dimension d
     and alpha """
     # nx.from_numpy_matrix goes from an adjacency matrix. It actually
     # works fine from an upper triangular matrix (with zeros on the diagonal)
     # so all good!
-    weights = generateWeights(n, tau)
-    weights = weights / np.sqrt(np.sum(weights))
+    if weights is None:
+        weights = generateWeights(n, tau)
+
+    if const is not None and desiredAvgDegree is not None:
+        raise ValueError("Cannot specify both const and desiredAvgDegree")
+
+    if const is None:
+        if desiredAvgDegree is not None:
+            const = girgs.scaleWeights(weights, desiredAvgDegree, d, alpha)
+        else:
+            const = 1.0
+
+    # e.g. PointsTorus2 and PointsMCD are both "True Volume", whereas PointsTorus differs by a factor of 2^d.
+    # PointsTorus implementation matces CGIRGs however and hence const, so we must scale based off it.
+    const_in = const * (2 ** d) if PointsTrue in points_type.__mro__ else const
+    # This is necessary because the c from girgs.scaleWeights is actually used for w_i -> c w_i.
+    # This makes w_u w_v / W -> c w_u w_v / W, and so the true c' (w_u w_v/W / r^d)^alpha is c' = c^alpha
+    const_in = const_in ** alpha
+    print(f'const_in: {const_in}')
+
     pts = generatePositions(n, d)
     pts = points_type(pts)
-    adj_mat = generateEdges(weights, pts, alpha, const=const)
+
+    # note / np.sqrt(np.sum(weights)), s.t. w_u w_v -> (w_u / sqrt(W)) (w_v / sqrt(W)) = w_u w_v / W
+    adj_mat = generateEdges(weights / np.sqrt(np.sum(weights)), pts, alpha, const=const_in)
+    # adj_mat = generateEdges(scaled_weights, pts, alpha, const=1.0)
 
     # g = nk.nxadapter.nx2nk(nx.from_numpy_array(edges))
     g = edge_list_to_nk_graph(zip(*np.nonzero(adj_mat)), n)
-    return g, adj_mat, weights, pts
+    return g, adj_mat, weights, pts, const
 
 
 
@@ -180,7 +201,6 @@ def cgirg_gen(n, d, tau, alpha, desiredAvgDegree=None, const=None, weights: Opti
     """
     if weights is None:
         weights = girgs.generateWeights(n, tau)
-    scaled_weights = weights
 
     if const is not None and desiredAvgDegree is not None:
         raise ValueError("Cannot specify both const and desiredAvgDegree")

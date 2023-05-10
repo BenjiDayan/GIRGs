@@ -20,6 +20,11 @@ class Points(np.ndarray):
         Returns an (n,n) matrix of distances between points
         """
         pass
+
+# True to Volume version of Points - need adjustments in const
+class PointsTrue(Points):
+    pass
+
 class PointsTorus(Points):
     def __new__(cls, input_array):
         # Input array is an already formed ndarray instance
@@ -30,6 +35,22 @@ class PointsTorus(Points):
 
     def dists(self):
         return get_dists_julia(self)
+
+# Potentiallly we get rid of this, but its a "True to volume" version of PointsTorus - PointsTorus matches
+# C++ GIRGs.
+class PointsTorus2(PointsTrue):
+    def __new__(cls, input_array):
+        # Input array is an already formed ndarray instance
+        # We first cast to be our class type
+        obj = np.asarray(input_array).view(cls)
+        # Finally, we must return the newly created object:
+        return obj
+
+    def dists(self):
+        n, d = self.shape
+        return 2*get_dists_julia(self)
+
+
     
 class PointsCube(Points):
     def __new__(cls, input_array):
@@ -68,7 +89,7 @@ class PointsCube(Points):
 # Vol(r) = n - Prod_{i=1}^k (n^(|a_i|/d) - (2r)^|a_i|) =
 #
 # I think we'd best use this full formula throughout for consistency
-class PointsMCD(Points):
+class PointsMCD(PointsTrue):
 
     def __new__(cls, input_array):
         obj = np.asarray(input_array).view(cls)
@@ -78,7 +99,9 @@ class PointsMCD(Points):
         n, d = self.shape
         r = get_dists_mcd(self)
         # return (n**((d-1)/d) * r)**(1/d)
-        out = n - (n**(1/d) - 2*r)**d
+        # out = n - (n**(1/d) - 2*r)**d
+        out = 1 - (1 - 2*r)**d
+        # out = 1 - (1 - r)**d
         return out**(1/d)
 def get_points_simple_mixed_class(groups):
     """
@@ -86,7 +109,7 @@ def get_points_simple_mixed_class(groups):
     We get a Min(diff0, Max(diff1, diff2)) distance for absolue torus distances.
 
     """
-    class PointsSimpleMixed(Points):
+    class PointsSimpleMixed(PointsTrue):
         my_groups = groups
         def __new__(cls, input_array):
             obj = np.asarray(input_array).view(cls)
@@ -97,8 +120,8 @@ def get_points_simple_mixed_class(groups):
             r = get_dists_mixed(self, self.my_groups)
             prod = 1
             for group in self.my_groups:
-                prod *= (n**(len(group)/d) - (2*r)**len(group))
-            out = n - prod
+                prod *= (1 - (2*r)**len(group))
+            out = 1 - prod
             return out**(1/d)
 
     return PointsSimpleMixed
