@@ -24,6 +24,8 @@ try:
 except Exception:
     pass
 
+import matplotlib.pyplot as plt
+
 def scale_param(param, scale, base, larger=True, eps=1e-10):
     if larger:
         out = base + (param - base) * (1 - scale)**(-1)
@@ -370,7 +372,7 @@ def gp_girg_cube_fitter(g, d, tau, n_calls=30, base_estimator=None):
     def fun_to_optimise(params):
         alpha = 1 / params[0]
         const = np.exp(params[1]) * const_guess
-        g, _ = generation.cgirg_gen_cube(n, d, tau, alpha, const=const)
+        g, edges, weights, pts, const = generation.cgirg_gen_cube(n, d, tau, alpha, const=const)
         a, b = utils.LCC(g), target_lcc
         x, y = utils.avg_degree(g), target_avg_degree
         return np.log(a / b) ** 2 + 10 * np.log(x / y) ** 2
@@ -399,7 +401,7 @@ def scipy_lbfgs_girg_cube_fitter(g, d, tau):
     def fun_to_optimise(params):
         alpha = 1 / params[0]
         const = np.exp(params[1]) * c_mid
-        g = generation.cgirg_gen_cube(n, d, tau, alpha, const=const)
+        g, edges, weights, pts, const = generation.cgirg_gen_cube(n, d, tau, alpha, const=const)
         a, b = utils.LCC(g), target_lcc
         x, y = utils.avg_degree(g), target_avg_degree
         return np.log(a / b) ** 2 + 10 * np.log(x / y) ** 2
@@ -574,3 +576,117 @@ class AirportLikelihoodGirgFitter(GirgFitter):
         print(f'alpha: {self.alpha:.3f}, const: {self.const:.4e}')
         self.t += 1
 
+def girg_loglikelihood(A, p_uv):
+    """
+
+    Args:
+        A: adjacency matrix nxn
+        p_uv: probability matrix
+
+    Returns:  log likelihood of A given p_uv
+
+    """
+    A_bar = -A + 1
+    # no self loops
+    np.fill_diagonal(A, 0)
+    np.fill_diagonal(A_bar, 0)
+
+    # this is all very painful, maybe we can just clip p_uv not to be 0 or 1
+    eps = 1e-7
+    p_uv = np.clip(p_uv, eps, 1 - eps)
+
+    # self.p_uv has some 0s and 1s, so np.log gives some -inf. We
+    # do nan_to_num which makes -inf -> large negative number, s.t.
+    # A_ij * ?_ij is 0 and not nan when previously ?_ij was -inf.
+
+    # of course if A_ij is not 0, i.e. we have an edge, yet still
+    # self.p_uv is 0, we -ve large, and log_likelihood will be
+    # -inf probably. :(
+    # log_likelihood = np.sum(
+    #     A * np.nan_to_num((np.log(p_uv))) +
+    #     A_bar * np.nan_to_num((np.log(1 - p_uv)))
+    # )
+
+    log_likelihood = np.sum(
+        A * np.log(p_uv) +
+        A_bar * np.log(1 - p_uv)
+    )
+
+    return log_likelihood
+
+
+
+def acceptance_prob(A, weights, alpha, const_in, pts, u_index, x_u2):
+    n = pts.shape[0]
+    eps = 1e-7
+    p_u_to_v = generation.get_probs_u(weights, pts, alpha, const_in, u_index)
+    p_u_to_v = np.clip(p_u_to_v, eps, 1 - eps)
+    x_u = pts[u_index].copy()
+    pts[u_index] = x_u2
+    p_u_to_v2 = generation.get_probs_u(weights, pts, alpha, const_in, u_index)
+    pts[u_index] = x_u
+
+    p_u_to_v2 = np.clip(p_u_to_v2, eps, 1 - eps)
+
+    # mask = np.ones(n, dtype=bool)
+    # mask[u_index] = False
+    # log_Q_u = A[u_index, mask] * np.log(p_u_to_v[mask]) + (1 - A[u_index, mask]) * np.log(1 - p_u_to_v[mask])
+    # log_Q_u2 = A[u_index, mask] * np.log(p_u_to_v2[mask]) + (1 - A[u_index, mask]) * np.log(1 - p_u_to_v2[mask])
+
+    A_u = A[u_index, :]
+    A_u_bar = 1 - A_u
+    log_Q_u = A_u * np.log(p_u_to_v) + A_u_bar * np.log(1 - p_u_to_v)
+    log_Q_u2 = A_u * np.log(p_u_to_v2) + A_u_bar * np.log(1 - p_u_to_v2)
+    log_Q_u_sum = log_Q_u.sum() - log_Q_u[u_index]
+    log_Q_u2_sum = log_Q_u2.sum() - log_Q_u2[u_index]
+
+    Q_ratio = np.exp(log_Q_u2_sum - log_Q_u_sum)
+    acceptance_prob = np.minimum(1, Q_ratio)
+
+    return acceptance_prob
+
+
+
+
+def mcmc_girg(A, weights, alpha, d, const, pts, n_steps=400, plot_every=None, ll_every=10):
+    # if plot_every > 0:
+    #     fig = plt.figure()
+    #     ax = fig.add_subplot(111)
+    #     plt.ion()
+    #     fig.show()
+    #     fig.canvas.draw()
+
+    weights = weights / np.sqrt(weights.sum())
+    n = pts.shape[0]
+    num_acceptances = 0
+    const_in = generation.const_conversion(const, alpha, d, true_volume=True)
+    lls = []
+    ll_steps = []
+    for i in tqdm(range(n_steps)):
+    # for i in range(n_steps):
+        if type(plot_every) is int and i % plot_every == 0:
+            ax = plt.gca()
+            fig = plt.gcf()
+            ax.clear()
+            ax.plot(ll_steps, lls)
+            ax.set_title(f'n_steps: {i} / {n_steps}, num_acceptances: {num_acceptances}')
+            fig.canvas.draw()
+
+        u_index = np.random.randint(n)
+        x_u2 = np.random.uniform(size=1)
+        a_prob = acceptance_prob(A, weights, alpha, const_in, pts, u_index, x_u2)
+
+        p = np.random.uniform()
+        accepted = a_prob > p
+        if accepted:
+            pts[u_index] = x_u2
+
+        if accepted:
+            num_acceptances += 1
+        if num_acceptances % ll_every == 0:
+            lls.append(girg_loglikelihood(A, generation.get_probs(weights, pts, alpha, const_in)))
+            ll_steps.append(i)
+            num_acceptances += 1
+            # print(f'{u_index}')
+
+    return pts, lls, num_acceptances
