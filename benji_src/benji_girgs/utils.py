@@ -28,6 +28,12 @@ def LCC(g):
     lcc.run()
     return np.mean(lcc.scores())
 
+def graph_degrees_to_weights(g: Graph):
+    """Converts a graph's degrees to weights, and returns the weighted graph.
+    """
+    degrees = nk.centrality.DegreeCentrality(g).run().scores()
+    return degrees
+
 class HiddenPrints:
     def __enter__(self):
         self._original_stdout = sys.stdout
@@ -387,11 +393,14 @@ def get_largest_component(g):
     return cc.extractLargestConnectedComponent(g, True)
 
 
-def get_diffmap(g):
+def get_diffmap(g, Iweighting=0.5, eye_or_ones="eye"):
     """
     Provided g is connected, find the diffusion map of g.
     w are the eigenvalues, decreasing from 1.0, lambda_2, lambda_3, ...
     diff_map(i) is the tth diffusion iteration of node i as a linear combination of Psi columns
+
+    eye_or_ones is experimental. Bandeira uses identity (eye), but I wonder if ones might do
+    a better job here?
     """
     if nk.components.ConnectedComponents(g).run().numberOfComponents() > 1:
         raise Exception("Graph is not connected")
@@ -405,9 +414,12 @@ def get_diffmap(g):
     D_h = D**(0.5)
     D_hi = D**(-0.5)
 
+    n = A.shape[0]
+
     # M_ij = W_ij / d_i
     M = np.diag(1/D) @ A
-    M = 0.5 * M + 0.5 * np.eye(M.shape[0])
+    # M = (1-Iweighting)* M + Iweighting * np.eye(M.shape[0])
+    M = (1 - Iweighting) * M + Iweighting * (np.ones((n, n))/n if eye_or_ones == "ones" else np.eye(n))
     # S_ij = W_ij / sqrt(d_i d_j) = sqrt(d_i) M_ij / sqrt(d_j)
     S = np.diag(D_h) @ M @ np.diag(D_hi)
 
@@ -432,3 +444,147 @@ def get_diffmap(g):
         return np.array([Phi[i, j] for j in range(n-2, -1, -1)]) * (w[1:]**t)
 
     return w, Phi, Psi, diff_map
+
+
+def get_diffmap2(g, Iweighting=0.5, eye_or_ones="eye"):
+    """
+    Provided g is connected, find the diffusion map of g.
+    w are the eigenvalues, decreasing from 1.0, lambda_2, lambda_3, ...
+    diff_map(i) is the tth diffusion iteration of node i as a linear combination of Psi columns
+
+    eye_or_ones is experimental. Bandeira uses identity (eye), but I wonder if ones might do
+    a better job here?
+    """
+    if nk.components.ConnectedComponents(g).run().numberOfComponents() > 1:
+        raise Exception("Graph is not connected")
+
+    w, Phi, Psi, diff_map = utils.get_diffmap(g, Iweighting=0.1, eye_or_ones='eye')
+
+    gnx = nk.nxadapter.nk2nx(g)
+    A = nx.linalg.adjacency_matrix(gnx).todense()
+
+    D = np.array([x[1] for x in (gnx.degree)])
+    D_h = D ** (0.5)
+    D_hi = D ** (-0.5)
+
+    M = np.diag(1 / D) @ A
+    theta = 0.5
+    M_tilde = M @ np.diag(D ** (-theta))
+    K = M_tilde.sum(axis=1)
+    K = 1 / K
+    M_tilde = np.diag(K) @ M_tilde
+    M_tilde = 0.9 * M_tilde + 0.1 * np.eye(M_tilde.shape[0])
+
+    # M_tilde = 0.5 * M_tilde + 0.5 * M_tilde.T
+
+    # w, Phi = np.linalg.eigh(M_tilde)
+
+    S = np.diag(1 / K) @ np.diag(D_h) @ M_tilde @ np.diag(D_hi)
+    w, V = np.linalg.eigh(S)
+    Phi = np.diag(D_hi) @ V
+    Psi = np.diag(D_h) @ V
+
+    n = Phi.shape[0]
+    w = np.flip(w)
+
+    # # Important bit!!!
+    Phi = np.diag(K) @ Phi
+
+    def diff_map(i, t):
+        # n = 5, so 0, 1, 2, 3, 4, we want to get 3, 2, 1, 0
+        # so 5-2 -> -1, -1
+        return np.array([Phi[i, j] for j in range(n - 2, -1, -1)]) * (w[1:] ** t)
+
+    return w, Phi, Psi, diff_map
+
+
+
+# gnx = nk.nxadapter.nk2nx(g)
+# A = nx.linalg.adjacency_matrix(gnx).todense()
+#
+# D = np.array([x[1] for x in (gnx.degree)])
+#
+# M = np.diag(1/D) @ A
+# # M = (1-Iweighting)* M + Iweighting * np.eye(M.shape[0])
+# M = (1 - 0.5) * M + 0.5 * np.eye(n)
+#
+# l, V = np.linalg.eig(M)
+#
+# def diff_map(i, t):
+#     # n = 5, so 0, 1, 2, 3, 4, we want to get 3, 2, 1, 0
+#     # so 5-2 -> -1, -1
+#     return np.array([V[i, j] for j in range(n-2, -1, -1)]) * (l[1:]**t)
+#
+# pts = np.array([diff_map(i, 10) for i in range(g.numberOfNodes())])
+# pts.shape
+# plt.figure()
+# xs = pts[:, 0]
+# ys = pts[:, 1]
+# plt.figure()
+# plt.scatter(xs, ys)
+#
+# plt.figure()
+# plt.scatter(xs, pts_torus[:, 1])
+#
+# plt.scatter(ys, pts_torus[:, 0])
+
+##########################
+
+# w, Phi, Psi, diff_map = utils.get_diffmap(g, Iweighting=0.1, eye_or_ones='eye')
+#
+# gnx = nk.nxadapter.nk2nx(g)
+# A = nx.linalg.adjacency_matrix(gnx).todense()
+#
+# D = np.array([x[1] for x in (gnx.degree)])
+# D_h = D**(0.5)
+# D_hi = D**(-0.5)
+#
+# M = np.diag(1/D) @ A
+# theta = 0.1
+# M_tilde = M @ np.diag(D**(-theta))
+# K = M_tilde.sum(axis=1)
+# K = 1/K
+# M_tilde = np.diag(K) @ M_tilde
+# M_tilde = 0.9* M_tilde + 0.1 * np.eye(M_tilde.shape[0])
+#
+# # M_tilde = 0.5 * M_tilde + 0.5 * M_tilde.T
+#
+# # w, Phi = np.linalg.eigh(M_tilde)
+#
+# S = np.diag(1/K) @ np.diag(D_h) @ M_tilde @ np.diag(D_hi)
+# w,  V = np.linalg.eigh(S)
+# Phi = np.diag(D_hi) @ V
+# Psi = np.diag(D_h) @ V
+#
+# n = Phi.shape[0]
+# w = np.flip(w)
+#
+# # # Important bit!!!
+# Phi = np.diag(K) @ Phi
+#
+# def diff_map(i, t):
+#     # n = 5, so 0, 1, 2, 3, 4, we want to get 3, 2, 1, 0
+#     # so 5-2 -> -1, -1
+#     return np.array([Phi[i, j] for j in range(n-2, -1, -1)]) * (w[1:]**t)
+#
+#
+#
+# ys = w[1:13]**8
+# #     plt.figure()
+# _ = plt.scatter(list(range(1, len(ys)+1)), ys, label=f'b: {b}')
+# #     plt.show()
+# plt.legend()
+# plt.show()
+#
+#
+# pts = np.array([diff_map(i, 10) for i in range(n)])
+# pts.shape
+# plt.figure()
+# xs = pts[:, 0]
+# ys = pts[:, 1]
+# plt.figure()
+# plt.scatter(xs, ys)
+#
+# fig, axes = plt.subplots(2, figsize=(5, 10))
+# axes[0].scatter(xs, pts_torus[:, 1])
+# axes[1].scatter(ys, pts_torus[:, 0])
