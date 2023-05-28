@@ -6,31 +6,8 @@ import pandas as pd
 import glob
 
 import os
-os.environ['DATA_PATH'] = '/cluster/home/bdayan/girgs/FeatureExtractionOutLCCMini3/'
+os.environ['DATA_PATH'] = '/cluster/home/bdayan/girgs/FE_FB_copyweights/'
 
-
-data_dir = '/cluster/scratch/bdayan/GIRG_data/'
-
-results_csv = '/cluster/home/bdayan/girgs/nemo-eva/data-paper/3-cleaned_features/results.csv'
-df = pd.read_csv(results_csv)
-
-df = df.loc[df.Model == 'real-world']
-
-max_number_of_nodes = 100000
-df = df.loc[df.Nodes < max_number_of_nodes].sort_values('Nodes')
-
-
-# array([['ia-enron-only', 'ia'],
-#        ['bn-macaque-rhesus_brain_1', 'bn'],
-#        ['inf-USAir97', 'inf'],
-# ....
-graph_name_group_pairs = df[['Graph', 'Type']].to_numpy()
-graph_dicts = []
-for graph_name, group in graph_name_group_pairs:
-    fn = glob.glob(data_dir + graph_name + '.*')[0]
-    print(fn)
-    graph_dict = {"Group": group, "FullPath": fn, "Name": graph_name}
-    graph_dicts.append(graph_dict)
 
 def quick_mixin(my_list, end_per_begin=5):
     """[1,2,3,4,5,6,7,8,9,10], 3 -> [1,2,10,3,4,9,5,6,8,7] roughly"""
@@ -51,8 +28,57 @@ def quick_mixin(my_list, end_per_begin=5):
     out.append(my_list[i])
     return out
 
+data_dir = '/cluster/scratch/bdayan/GIRG_data/'
 
-graph_dicts = quick_mixin(graph_dicts, end_per_begin=6)
+results_csv = '/cluster/home/bdayan/girgs/nemo-eva/data-paper/3-cleaned_features/results.csv'
+df = pd.read_csv(results_csv)
+
+df = df.loc[df.Model == 'real-world']
+
+socfb_graphs = df.loc[df.Model == 'real-world'].loc[df.Type == 'socfb'].sort_values('Nodes')
+
+
+graph_name_group_pairs = socfb_graphs[['Graph', 'Type']].to_numpy()
+graph_dicts = []
+for graph_name, group in graph_name_group_pairs:
+    # TODO remove? socfg-nips-ego has avg deg 2.0 which is very small, and for some reason
+    #  makes GIRG finding much slower
+    #  and idk why but it's no longer in data_dir wtf???
+    if graph_name == 'socfb-nips-ego':
+        continue
+    fn = glob.glob(data_dir + graph_name + '.*')[0]
+    print(fn)
+
+    graph_dict = {"Group": group, "FullPath": fn, "Name": graph_name}
+    graph_dicts.append(graph_dict)
+
+
+# TODO put back in?
+graph_dicts = quick_mixin(graph_dicts, end_per_begin=5)
+
+
+# # The data has changed for these two.
+# df = df.loc[~df.Graph.isin(['bn-human-BNU_1_0025889_session_2', 'bn-human-BNU_1_0025873_session_1-bg'])]
+#
+# max_number_of_nodes = 100000
+# df = df.loc[df.Nodes < max_number_of_nodes].sort_values('Nodes')
+#
+#
+# # array([['ia-enron-only', 'ia'],
+# #        ['bn-macaque-rhesus_brain_1', 'bn'],
+# #        ['inf-USAir97', 'inf'],
+# # ....
+# graph_name_group_pairs = df[['Graph', 'Type']].to_numpy()
+# graph_dicts = []
+# for graph_name, group in graph_name_group_pairs:
+#     fn = glob.glob(data_dir + graph_name + '.*')[0]
+#     print(fn)
+#     graph_dict = {"Group": group, "FullPath": fn, "Name": graph_name}
+#     graph_dicts.append(graph_dict)
+#
+#
+#
+# graph_dicts = quick_mixin(graph_dicts, end_per_begin=6)
 
 # graph_name_group_pairs = df.groupby('Graph').Type.unique()
 # graph_name_group_pairs = graph_name_group_pairs.apply(lambda x: x[0])
@@ -80,5 +106,5 @@ if __name__ == '__main__':
     print('execute fast write?')
     fe.execute_immediate_write()
 
-# sbatch --time=24:00:00 --ntasks=1 --cpus-per-task=20 --mem-per-cpu=2G --wrap="python do_feature_extract.py"
-# sbatch --time=1-20 --ntasks=1 --cpus-per-task=12 --mem-per-cpu=5000 --wrap="python do_feature_extract.py"
+# sbatch --time=24:00:00 --ntasks=1 --cpus-per-task=12 --mem-per-cpu=2G --wrap="python do_feature_extract.py"
+# sbatch --time=24:00:00 --ntasks=1 --cpus-per-task=16 --mem-per-cpu=15G --wrap="python do_feature_extract.py"
