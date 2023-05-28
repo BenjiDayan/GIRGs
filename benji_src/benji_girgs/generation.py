@@ -10,7 +10,7 @@ try:
 except Exception:
     pass
 
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Type
 import random
 
 import os
@@ -55,7 +55,7 @@ def generatePositions(
     return np.random.uniform(size=(n, dimension))
 
 
-def get_probs(weights: List[float], pts: Points, alpha=2.0, const=1.0):
+def get_probs(weights: np.ndarray, pts: Points, alpha=2.0, const=1.0):
     """
     Computes min(1, w_u w_v / ||x_u - x_v||_inf^d)^alpha
     as a big n x n square matrix (we only need upper triangular bit tho)
@@ -67,6 +67,19 @@ def get_probs(weights: List[float], pts: Points, alpha=2.0, const=1.0):
     p_uv = np.power(p_uv, alpha)
     p_uv = np.minimum(const * p_uv, 1)
     return p_uv
+
+
+def get_probs_u(weights: np.ndarray, pts: Points, alpha, const, u_index):
+    """
+    Computes min(1, w_u w_v / ||x_u - x_v||_inf^d)^alpha for a given u
+    """
+    n, d = pts.shape
+    wuwv = weights[u_index] * weights
+    dists = pts[u_index].dist(pts)
+    p_uv = np.divide(wuwv, dists**d)
+    p_uv = np.power(p_uv, alpha)
+    p_uv = np.minimum(const * p_uv, 1)
+    return p_uv  # note this is a vector of length n, so includes a self loop at u_index
 
 ################# NB The below note is now deprecated as I changed Torus points in general to be in a cube of side
 # length 1 rather than n^(1/d). This is because the CGIRG code does this and it makes it easier to compare.
@@ -156,12 +169,74 @@ def edge_list_to_nk_graph(edge_list: List[Tuple[int, int]], n) -> Graph:
     return g
 
 
-def generate_GIRG_nk(n, d, tau, alpha, desiredAvgDegree=None, const=None, weights: Optional[np.ndarray] = None, points_type=PointsTorus):
-    """Generate a GIRG of n vertices, with power law exponent tau, dimension d
-    and alpha """
+def quick_expected_degree_func(weights, alpha, c):
+    """This is the True Volumetric version of the expected degree function that Blasius numerically optimises over
+    in order to get a desired average degree.
+
+    The formula is essentially:
+    p_uv|Vol = c ((w_u w_v / W) / Vol)^alpha  (given already all the weights)
+    so p_uv = V^ + c (...)^alpha [1/(alpha -1) V^ ^ (1 - alpha) - 1/(alpha -1)]
+    = c^(1/alpha) (w_u w_v / W) [1 + 1/(alpha -1)] - c/(alpha - 1) (w_u w_v / W)^alpha
+
+    However we must correct for all places where actually the weights are large enough that p_uv > 1 throughout the
+    whole Torus. I.e. then we just set p_uv = 1.0.
+
+    The return value is the expected total number of edges in the graph, i.e. the sum of all degrees, divided by 2.
+    """
+    cross = np.outer(weights, weights)
+    W = np.sum(weights)
+    cross = cross/W
+    # These indices are for correction
+    bad = cross > c**(-1/alpha)
+    np.fill_diagonal(cross, 0.0)
+    out = (c**(1/alpha)) * cross * (1 + 1/(alpha - 1)) - (1 / (alpha - 1)) * c * (cross ** alpha)
+    # correct the bad indices
+    out[bad] = 1.0
+    return out.sum()/2
+
+def const_conversion(const, alpha, d=None, true_volume=False):
+    """
+
+    The const c used by Blasius (returned by scaleWeights) is intended to be used actually as c^alpha
+
+    This is necessary because the c from girgs.scaleWeights is actually used for w_i -> c w_i.
+    This makes w_u w_v / W -> c w_u w_v / W, and so the true c' (w_u w_v/W / r^d)^alpha is c' = c^alpha
+
+    What's worse if we're using a true volume formulation, we replace c by c * (2**d).
+    """
+    out = const
+    if true_volume:
+        if not type(d) is int and d >=1:
+            assert("Must provide a dimension d >= 1")
+        out *= (2**d)
+    return out**alpha
+
+def generate_GIRG_nk(n, d, tau, alpha,
+                     desiredAvgDegree=None,
+                     const=None, weights: Optional[np.ndarray] = None,
+                     points_type=PointsTorus,
+                     c_implementation=False):
+    """Generate a GIRG of n vertices, with power law exponent tau, dimension d and alpha
+
+    NB if the cube version is used, an edge list (pairs (u, v)) is returned instead of an adjacency matrix
+
+    We should try and phase out direct use of cgirg_gen, and use this as a wrapper instead. Code is messy!
+    c_implementation only does normal torus GIRGs, no min / mixed / cube GIRGs. Once phased out, all
+    the weights (None?) and const/desiredAvgDegree (None?) stuff should only remain in this function.
+    """
     # nx.from_numpy_matrix goes from an adjacency matrix. It actually
     # works fine from an upper triangular matrix (with zeros on the diagonal)
     # so all good!
+    if points_type is PointsCube:  # This is our only Cube GIRG implementation so far
+        gnk, edges, weights, pts, const = generate_GIRG_nk(n, d, tau, alpha, desiredAvgDegree, const, weights, PointsTorus2)
+        edges = np.array(upper_triangular_to_edgelist_fastest(edges))
+        gnk, edges, weights, pts, const = girg_cube_coupling(gnk, edges, weights, pts, const, alpha, PointsCube)
+        return gnk, edges, weights, pts, const
+
+    if c_implementation:
+        gnk, edges, weights, pts, const = cgirg_gen(n, d, tau, alpha, desiredAvgDegree, const, weights)
+        return gnk, edges, weights, pts, const
+
     if weights is None:
         weights = generateWeights(n, tau)
 
@@ -176,10 +251,12 @@ def generate_GIRG_nk(n, d, tau, alpha, desiredAvgDegree=None, const=None, weight
 
     # e.g. PointsTorus2 and PointsMCD are both "True Volume", whereas PointsTorus differs by a factor of 2^d.
     # PointsTorus implementation matces CGIRGs however and hence const, so we must scale based off it.
-    const_in = const * (2 ** d) if PointsTrue in points_type.__mro__ else const
+    true_volume = PointsTrue in points_type.__mro__
+    const_in = const_conversion(const, alpha, d=d, true_volume=true_volume)
+    # const_in = const * (2 ** d) if PointsTrue in points_type.__mro__ else const
     # This is necessary because the c from girgs.scaleWeights is actually used for w_i -> c w_i.
     # This makes w_u w_v / W -> c w_u w_v / W, and so the true c' (w_u w_v/W / r^d)^alpha is c' = c^alpha
-    const_in = const_in ** alpha
+    # const_in = const_in ** alpha
     print(f'const_in: {const_in}')
 
     pts = generatePositions(n, d)
@@ -191,10 +268,8 @@ def generate_GIRG_nk(n, d, tau, alpha, desiredAvgDegree=None, const=None, weight
 
     # g = nk.nxadapter.nx2nk(nx.from_numpy_array(edges))
     g = edge_list_to_nk_graph(zip(*np.nonzero(adj_mat)), n)
+    # TODO we used to return const, now we return const_in. Will this mess anything up in the feature extraction?
     return g, adj_mat, weights, pts, const
-
-
-
 
 def cgirg_gen(n, d, tau, alpha, desiredAvgDegree=None, const=None, weights: Optional[List[float]] = None):
     """Generate a GIRG with C-library
@@ -254,6 +329,8 @@ def cgirg_gen_cube_coupling_slow(n, d, tau, alpha, desiredAvgDegree=None, const=
     weights = np.array(weights)
     W = np.sum(weights)
 
+    edges_out = []
+
     for u, v in edges:
         xu, xv = pts[u], pts[v]
         wu, wv = weights[u], weights[v]
@@ -267,9 +344,12 @@ def cgirg_gen_cube_coupling_slow(n, d, tau, alpha, desiredAvgDegree=None, const=
         p_edge = p_uv_cube/p_uv
         if np.random.rand() > p_edge:
             gnk.removeEdge(u, v)
+        else:
+            edges_out.append((u, v))
 
-    return gnk
+    return gnk, edges_out, weights, pts, const
 
+# TODO I think this is bugged as const is not taken into account
 def cgirg_gen_cube_coupling(n, d, tau, alpha, desiredAvgDegree=None, const=None, weights: Optional[List[float]] = None):
     """This version is hopefully more efficient, and uses coupling.
     So G is a torus GIRG, G' is a coupled cube GIRG which has a subset of the edges of G.
@@ -279,6 +359,9 @@ def cgirg_gen_cube_coupling(n, d, tau, alpha, desiredAvgDegree=None, const=None,
                     {0 : 1 - P'_uv/ P_uv
     This is where P'_uv == P_uv mostly if r'_uv == r_uv, and P'_uv < P_uv possibly if r'_uv > r_uv, i.e. distance
     on cube might be longer than on torus
+
+    NB desiredAvgDegree (and const by extension) are both intended for a normal non cube GIRG, so they can
+    be given, but the outcome average degree will be different (but same ballpark)
     """
     # P_uv = min[1, c( (w_u w_v/W) / r_uv^d)^alpha]
     # But actually we use the scaled weights, so const c disappears.
@@ -308,7 +391,47 @@ def cgirg_gen_cube_coupling(n, d, tau, alpha, desiredAvgDegree=None, const=None,
     for u, v in edges[to_remove]:
         gnk.removeEdge(u, v)
 
-    return gnk
+    return gnk, edges[~to_remove], weights, pts, const
+
+def girg_cube_coupling(gnk, edges: np.ndarray, weights: np.ndarray, pts: Points, const, alpha, cube_type: Type[PointsCube]):
+    """
+    edges should be a [(u, v), ...] 2d array of edges
+    Uses pts.dist method vs cube_type(pts).dist method as the coupling differentiation
+    """
+    # # P_uv = min[1, c( (w_u w_v/W) / r_uv^d)^alpha]
+    # # But actually we use the scaled weights, so const c disappears.
+    # # P_uv = min[1, ( (w_u w_v / W) / r_uv^d)^alpha]
+    # gnk, edges, weights, pts, const = cgirg_gen(n, d, tau, alpha, desiredAvgDegree, const, weights)
+
+    d = pts.shape[1]
+    const_in = const_conversion(const, alpha, d=d, true_volume=True)
+
+    W = np.sum(weights)
+    d = pts.shape[1]
+
+    u, v = edges[:, 0], edges[:, 1]
+    xu, xv = pts[u], pts[v]
+    original_edge_dists = xu.dist(xv)
+
+    pts = cube_type(pts)
+    xu, xv = pts[u], pts[v]
+    cube_edge_dists = xu.dist(xv)
+
+
+    wu, wv = weights[u], weights[v]
+
+
+    puv = np.stack([np.ones(original_edge_dists.shape), const_in * ((wu * wv / W) / original_edge_dists ** d) ** alpha]).min(axis=0)
+    puv_cube = np.stack([np.ones(cube_edge_dists.shape), const_in * ((wu * wv / W) / cube_edge_dists ** d) ** alpha]).min(axis=0)
+
+
+    samples = np.random.uniform(size=cube_edge_dists.shape)
+    to_remove = samples > puv_cube / puv
+
+    for u, v in edges[to_remove]:
+        gnk.removeEdge(u, v)
+
+    return gnk, edges[~to_remove], weights, pts, const
 
 
 cgirg_gen_cube = cgirg_gen_cube_coupling
