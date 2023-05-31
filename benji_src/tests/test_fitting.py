@@ -23,12 +23,23 @@ def test_simple_cube_mcmc():
 
     w, Phi, Psi, diff_map = utils.get_diffmap(g, Iweighting=0.5, eye_or_ones='eye')
 
-    pts_diffmap = np.array([diff_map(i, 5) for i in range(n)])
+    pts_diffmap = np.array([diff_map(i, 10) for i in range(2)])
     pts_diffmap = points.normalise_points_to_cube(pts_diffmap)
     pts_diffmap = points.PointsTorus2(pts_diffmap[:, 0:1])
 
     pts_diffmap_final, lls, num_acceptances = fitting.mcmc_girg(A, weights, alpha, d, const, pts_diffmap,
                                                                 n_steps=500, ll_every=20)
+
+
+def test_simple_cube_mcmc_class():
+    g, edges, weights, pts, const = generation.generate_GIRG_nk(n, d, tau, alpha, desiredAvgDegree=desiredAvgDegree,
+                                                                points_type=points.PointsCube)
+
+    weights = np.array(utils.graph_degrees_to_weights(g))
+    mcmc = fitting.MCMC_girg(g, weights, alpha, const)
+
+    print('running mcmc')
+    mcmc.run(1000)
 
 
 if __name__ == '__main__':
