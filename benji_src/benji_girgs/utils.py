@@ -1,6 +1,7 @@
 from itertools import zip_longest
 import networkit as nk
 import numpy as np
+import scipy
 from networkit.graph import Graph
 import networkx as nx
 import sys
@@ -73,7 +74,7 @@ def sample_edge_stuff(g: Graph, num_edges: int):
         for l in lambdas:
             a_big_nhbs = a_nhbs[a_weights > degrees[a] * l]
             lambda_intersects.append(
-                (l, 
+                (l,
                  len(set(b_nhbs).intersection(set(a_big_nhbs)))/len(a_big_nhbs)
                 )
             )
@@ -96,7 +97,7 @@ def sample_possible_triangles(g, num_triangles):
         c_deg = g.degree(c)
         if c_deg < 2:
             continue
-    
+
         c_nhbs = list(g.iterNeighbors(c))
         a, b = np.random.choice(len(c_nhbs), 2, replace=False)
         a, b = c_nhbs[a], c_nhbs[b]
@@ -139,16 +140,16 @@ def fit_girg_alpha(g_true: nk.Graph, d, tau, num_edges=6000):
         percs = get_perc_lower_common_nhbs(g, num_edges)
         percs_median = np.median(percs)
         print(f'alpha: {alpha:.3f}, percs_median: {percs_median:.3f}')
-        
+
         scaly_thing = l*np.exp(-k * t)
         print(f'scaly_thing: {scaly_thing}')
 
         if percs_median > percs_true_median:
-            
+
             alpha = 1 + (alpha - 1) * (1 - scaly_thing)
         else:
             alpha = 1 + (alpha - 1) * (1 - scaly_thing)**(-1)
-            
+
         t += 1
 
 
@@ -166,9 +167,9 @@ def expected_node_weight_func(n, tau, alpha, d):
     def func(weight):
         expected_degree = (2**d) * ((a + b) * weight + c * weight**alpha)
         return expected_degree
-    
+
     return func
-    
+
 
 # interestingly this doesn't depend on tau?
 def expected_node_degree_c(n, tau, alpha, d, const):
@@ -188,7 +189,7 @@ def expected_node_degree_c(n, tau, alpha, d, const):
     def func(weight):
         expected_degree = (2**d) * ((a + b) * weight + c * weight**alpha)
         return expected_degree
-    
+
     return func
 
 # p(r | w_u, w_v, x_u)
@@ -250,7 +251,7 @@ def fractal_dimensions(dists):
 
 def sort_out_dist_matrix(dists):
     """dists: a square n x n integer matrix of distances.
-    
+
     return: something like
     array([[  1,   5,  30, 131, 431, 354,  28,   0],
            [  1,   9,  47, 202, 479, 231,  11,   0],
@@ -266,7 +267,7 @@ def sort_out_dist_matrix(dists):
         # distances will look like -9223372036854775808, 0, 1, 2, ...
         distances, counts = np.unique(vec, return_counts=True)
         new_dists.append(counts[distances >= 0])
-        
+
     return np.array(list(zip_longest(*new_dists, fillvalue=0))).T
 
 
@@ -286,7 +287,7 @@ def simple_bfs_search(g, weights, weight_thresh):
 def simple_bfs(g, starting_node, degree_thresh=None):
     """BFS out from starting_node, only accessing nodes with weight < weight_thresh.
     Nodes with higher weights are ignored.
-    
+
     return: dist = {0: [starting_node], 1: [nodes of dist 1], 2: [nodes of dist 2], ...}"""
     dists = {0: set([starting_node])}
     visited = set([starting_node])
@@ -304,13 +305,13 @@ def simple_bfs(g, starting_node, degree_thresh=None):
                         if g.degree(nhb) < degree_thresh:
                             new_dist.add(nhb)
                     else:
-                        new_dist.add(nhb)         
-                        
+                        new_dist.add(nhb)
+
         dist += 1
         dists[dist] = new_dist
         if not trigger:
             break
-            
+
     return dists
 
 def bi_bfs(g, a, b):
@@ -369,7 +370,7 @@ def quick_subgraph(g, indices):
         if edge not in seen:
             seen.add(edge)
             _ = g3.addEdge(old2new_nodes[u], old2new_nodes[v])
-        
+
     return g3
 
 
@@ -393,7 +394,7 @@ def get_largest_component(g):
     return cc.extractLargestConnectedComponent(g, True)
 
 
-def get_diffmap(g, Iweighting=0.5, eye_or_ones="eye"):
+def get_diffmap(g, Iweighting=0.5, eye_or_ones="eye", sparse_evals=10):
     """
     Provided g is connected, find the diffusion map of g.
     w are the eigenvalues, decreasing from 1.0, lambda_2, lambda_3, ...
@@ -401,6 +402,10 @@ def get_diffmap(g, Iweighting=0.5, eye_or_ones="eye"):
 
     eye_or_ones is experimental. Bandeira uses identity (eye), but I wonder if ones might do
     a better job here?
+
+    sparse_evals: We do things sparsely, and the sparse eigenvalue finder can actually
+    restrict to the top k eigenvalues, so we will use this. As long as you only e.g. care about
+    max the top 3 dimensions, happily set this to 10 I guess.
     """
     if nk.components.ConnectedComponents(g).run().numberOfComponents() > 1:
         raise Exception("Graph is not connected")
@@ -408,7 +413,8 @@ def get_diffmap(g, Iweighting=0.5, eye_or_ones="eye"):
 
     gnx = nk.nxadapter.nk2nx(g)
 
-    A = nx.linalg.adjacency_matrix(gnx).todense()
+    # A = nx.linalg.adjacency_matrix(gnx).todense()
+    A = nx.linalg.adjacency_matrix(gnx)
 
     D = np.array([x[1] for x in (gnx.degree)])
     D_h = D**(0.5)
@@ -417,31 +423,53 @@ def get_diffmap(g, Iweighting=0.5, eye_or_ones="eye"):
     n = A.shape[0]
 
     # M_ij = W_ij / d_i
-    M = np.diag(1/D) @ A
+    # M = np.diag(1/D) @ A
+    # sparse array version
+    M = (A.T).multiply(1/D).T
+
     # M = (1-Iweighting)* M + Iweighting * np.eye(M.shape[0])
-    M = (1 - Iweighting) * M + Iweighting * (np.ones((n, n))/n if eye_or_ones == "ones" else np.eye(n))
+    # M = (1 - Iweighting) * M + Iweighting * (np.ones((n, n))/n if eye_or_ones == "ones" else np.eye(n))
+    # sparse array version
+    M = (1 - Iweighting) * M + scipy.sparse.eye(n) * Iweighting
+
     # S_ij = W_ij / sqrt(d_i d_j) = sqrt(d_i) M_ij / sqrt(d_j)
-    S = np.diag(D_h) @ M @ np.diag(D_hi)
+    # S = np.diag(D_h) @ M @ np.diag(D_hi)
+    # sparse array version
+    S = scipy.sparse.diags(D_h) @ M @ scipy.sparse.diags(D_hi)
 
-
-    w, V = np.linalg.eigh(S)
+    # w, V = np.linalg.eigh(S)
+    # sparse array version
+    w, V = scipy.sparse.linalg.eigsh(S, k=sparse_evals, which="LM")
 
     # S = V @ np.diag(w) @ V.T
-    # M = D^{-1/2} @ S @ D^{1/2} 
+    # M = D^{-1/2} @ S @ D^{1/2}
     # = D^{-1/2} @ V @ np.diag(w) @ V.T @ D^{1/2}
     # = Phi @ np.diag(w) @ Psi.T
     # Phi = D^{-1/2} @ V
     # Psi = D^{1/2} @ V
-    Phi = np.diag(D_hi) @ V
-    Psi = np.diag(D_h) @ V
+    # Phi = np.diag(D_hi) @ V
+    # Psi = np.diag(D_h) @ V
+    # sparse array version
+    Phi = scipy.sparse.diags(D_hi) @ V
+    Psi = scipy.sparse.diags(D_h) @ V
 
-    n = Phi.shape[0]
     w = np.flip(w)
 
     def diff_map(i, t):
+        """
+        diff map of v_i is (l_1^t phi_1(i), l_2^t phi_2(i), ..., l_n^t phi_n(i))
+        phi_1(i) = Phi[i, 0],
+        phi_2(i) = Phi[i, 1] etc.
+
+        Hence we want Phi[i, n-1], Phi[i, n-2], ..., Phi[i, 0] because actually we flipped the eigenvalues to
+        be largest at the front.
+
+        Returns the diffusion map of node i after t iterations, ordered from largest eigenvalue to smallest.
+        """
         # n = 5, so 0, 1, 2, 3, 4, we want to get 3, 2, 1, 0
         # so 5-2 -> -1, -1
-        return np.array([Phi[i, j] for j in range(n-2, -1, -1)]) * (w[1:]**t)
+        # return np.array([Phi[i, j] for j in range(n-2, -1, -1)]) * (w[1:]**t)
+        return Phi[i, -2::-1] * (w[1:] ** t)
 
     return w, Phi, Psi, diff_map
 

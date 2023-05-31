@@ -1,15 +1,10 @@
-from itertools import zip_longest
+
 import networkit as nk
-import networkx as nx
 import numpy as np
-from networkit.graph import Graph
 import networkx as nx
-import pandas as pd
-import seaborn as sns
 import scipy
 
 from tqdm import tqdm
-import powerlaw
 
 from benji_girgs import generation
 from benji_girgs import utils
@@ -17,8 +12,6 @@ from benji_girgs.utils import avg_degree, get_perc_lower_common_nhbs
 
 import skopt
 
-# import os
-# if not "NO_CPP_GIRGS" in os.environ:
 try:
     from girg_sampling import girgs
 except Exception:

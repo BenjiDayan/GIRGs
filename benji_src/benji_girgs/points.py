@@ -3,12 +3,13 @@ from typing import List
 
 import os
 
-from julia.api import Julia
-jl_temp = Julia(compiled_modules=False)
-from julia import Main as jl
-file_path = os.path.dirname(os.path.abspath(__file__)) + '/benji_jl_dists.jl'
-jl.file_path = file_path
-jl.eval('include(file_path)')
+# TODO reinstate if using this stuff
+# from julia.api import Julia
+# jl_temp = Julia(compiled_modules=False)
+# from julia import Main as jl
+# file_path = os.path.dirname(os.path.abspath(__file__)) + '/benji_jl_dists.jl'
+# jl.file_path = file_path
+# jl.eval('include(file_path)')
 
 
 class Points(np.ndarray):
