@@ -1,0 +1,22 @@
+\chapter{MCMC}
+\section{Introduction}
+The binary classification framework is designed to compare the similarity of two distributions of datapoints. Each graph is a datapoint, and the classifier compares graphs only on higher level features meant to distinguish distributions of graphs, not individual graphs. In particuular these features are node permutation invariant - such as average degree, effective diameter and so on.
+
+An alternative framework is to try to fit a GGM model to a graph so as to compare on an edgewise and likelihood basis. For for the GIRG GGM, this means not just fitting $\hat{\alpha}$ to match the local clustering coefficient, $\hat{c}$ to match the number of edges, and $\hat{\tau}$ to match the degree distribution tail, but to further actually try and infer individual node weights $w_u$, and positions $x_u$. 
+
+We saw this already to some extent with the copy-weight GIRGs - where $\hat{w}_u = d_u$ is fit, as the observed real graph node degrees. The $x_u$ are much harder to fit - for a start any maximum likelihood fit $\hat{x}_u$ would be rotation, reflection, and translation invariant (isometries). Finding any one maximum likelihood fit is impractical for all but the smallest graphs. Instead we try a Markov-Chain MonteCarlo (MCMC) approach to sample a set of locations $\{x_u\}$ from the posterior distribution.
+
+\section{Formulation}
+MCMC is a method in the bayesian framework of a parametric generative model. Parameter $\theta$ has prior $p(\theta)$. Datapoint $z \sim p(z | \theta)$. In our case of our node specific fitting GIRG GGM, $\theta = (\alpha, c, \{w_u\}_{u \in V}, \{x_u\}_{u \in V})$, and we focus in particular on the locations $x_u$. $z$ for us is one real graph instance $G$.
+
+The posterior likelihood $p(\theta | z) = \frac{p(z | \theta) p(\theta)}{p(z)}$ is infeasible to compute due to the normalising factor $p(z)$. MCMC instead uses the non normalised $Q(\theta) = p(z | \theta) p(\theta)$ which can be evaluated, to set up a Markov Chain with states $\theta \in \Theta$, and transition probabilities derived from $Q(\theta)$. In particular we will use a Metropolis-Hastings style markov chain. With a proper MC state transition probability $p(\theta \to \theta')$, we can perform a random walk on the MC state space that converges in the limit to the posterior distribution $\theta \sim p(\theta | z)$. If the jth step of the random walk yields $\theta^j$, given sufficient burn in and spacing, we can sample $\theta^{j_1}, \theta^{j_2}, ...$ from the posterior. We will be content with just one posterior sampled $\hat{\theta}$ (NB not a maximum likelihood estimator), and use this to evaluate our overall GIRG model fit to the real graph.
+
+I think we do a Gibb's sampling approach. This means both breaking down $\theta$ into subcomponents $\theta_i$, randomly choosing one to propose a new state for, i.e. $\theta' = (\theta'_i, \theta_{-i})$, and using the $Q_i(\theta_i)$ instead of $Q(\theta)$ - i.e. just the marginal non-normalised posterior. In our case $Q(\theta) = p(G | \theta) p(\theta)$, so the uniform prior $p(\theta)$ can be dropped everywhere as $p(\theta) = 1\; \forall \theta$, and then $p(G | \theta) = \prod{u, v \in V; u \neq v} p(e(u,v) | w_u, w_v, x_u, x_v, \alpha, c)$. This lends well to Gibb's sampling - we need concentrate only on $Q_u(\theta_u) = \prod{v \neq u} p(e(u,v) | ...)$.
+
+Key elements of the MCMC approach are 1. burn in time, and 2. proposal distribution. 
+
+Burn in time can be quite long. One key component is a good initialisition. With the GIRG model, the natural initialisation for $x_u$ would be to follow the prior $x_u \sim U([0, 1]^d)$. Instead we use an initialisation based on d-truncated diffusion map from the real graph connectivity. We also try to optimise our code and use multiprocessing to speed up the random walk.
+
+The proposal distribution should be designed to maximise chances of acceptance. It seemed reasonable to stochastically propose either a small local perturbation, or a random jump to anywhere in the cube, with some probability of either (we elected for 70\% small perturbation). A random uniform jump is useful to try and find a completely new location for $x_u$ that could suit (hopefully near to its neighbours) - in fact another good proposal would be to randomly choose a neighbour $v \sim u$, and move $x_u$ to a random offset of $x_v$. A small perturbation $x_u' = x_u + \epsilon$ is good as assuming $x_u$ has high likelihood, somewhere nearby might have even higher.
+
+
