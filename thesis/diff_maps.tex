@@ -130,3 +130,20 @@ Interestingly Toroidal GIRGs are differentiated from Cube GIRGs in that the diff
 
 
 One issue with diffusion maps is that even if the graph was Cube GIRG generated, the diffusion map coordinates may be a (slightly malformed) rotation of the actual cube. The diffusion map also seems slightly over concentrated in its corners/edges. 
+
+
+TODO 
+
+- fuller analysis of different diffmap modes: 'uniformify', 'cubify' and 'cuboidify', comparing performance on real life and synthetic graphs
+
+- presentation of the small degree stochastic walk tweak which improves diffusion map performance:
+\begin{verbatim}
+# Empirically this gamma seems to work well. 
+# It discourages taking edges to popular nhbs.
+gamma = 0.9
+M_tilde = scipy.sparse.diags(1 / D) @ A @ scipy.sparse.diags(D ** (-gamma))
+M_tilde = scipy.sparse.diags(np.array(1 / M_tilde.sum(axis=-1)).squeeze()) @ M_tild
+\end{verbatim}
+
+- is it true that diffusion map tends to cluster representations edges rather than being more uniform? Empricially seems to happen in 2D but not 1D?
+
