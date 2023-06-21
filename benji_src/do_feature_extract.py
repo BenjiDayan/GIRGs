@@ -6,7 +6,7 @@ import pandas as pd
 import glob
 
 import os
-os.environ['DATA_PATH'] = '/cluster/home/bdayan/girgs/FE_FB_copyweights/'
+os.environ['DATA_PATH'] = '/cluster/home/bdayan/girgs/FE_FB_copyweights_cube/'
 
 
 def quick_mixin(my_list, end_per_begin=5):
@@ -54,7 +54,7 @@ for graph_name, group in graph_name_group_pairs:
 
 
 # TODO put back in?
-graph_dicts = quick_mixin(graph_dicts, end_per_begin=5)
+graph_dicts = quick_mixin(graph_dicts, end_per_begin=7)
 
 
 # # The data has changed for these two.
@@ -97,6 +97,8 @@ graph_dicts = quick_mixin(graph_dicts, end_per_begin=5)
 
 # Try first just a few
 # graph_dicts = graph_dicts[:3]
+
+import multiprocessing
 if __name__ == '__main__':
     print('running on graph dicts:')
     print(graph_dicts)
@@ -105,6 +107,24 @@ if __name__ == '__main__':
 
     print('execute fast write?')
     fe.execute_immediate_write()
+
+    # self = fe
+    # if not os.path.exists(self._stagepath):
+    #     os.makedirs(self._stagepath)
+    #
+    # # import multiprocessing.dummy
+    # writer_pool = multiprocessing.Pool(1)
+    # # writer_pool = multiprocessing.dummy.Pool(1)
+    # writer_out = writer_pool.apply_async(self.listener, (self._dict_queue,))
+    #
+    # graph_dicts = [{'Group': 'socfb', 'FullPath': '/cluster/scratch/bdayan/GIRG_data/socfb-Caltech36.SpaceOne', 'Name': 'socfb-Caltech36'}, {'Group': 'socfb', 'FullPath': '/cluster/scratch/bdayan/GIRG_data/socfb-Reed98.SpaceOne', 'Name': 'socfb-Reed98'}, {'Group': 'socfb', 'FullPath': '/cluster/scratch/bdayan/GIRG_data/socfb-Haverford76.SpaceOne', 'Name': 'socfb-Haverford76'}, {'Group': 'socfb', 'FullPath': '/cluster/scratch/bdayan/GIRG_data/socfb-Simmons81.SpaceOne', 'Name': 'socfb-Simmons81'}, {'Group': 'socfb', 'FullPath': '/cluster/scratch/bdayan/GIRG_data/socfb-Swarthmore42.SpaceOne', 'Name': 'socfb-Swarthmore42'}, {'Group': 'socfb', 'FullPath': '/cluster/scratch/bdayan/GIRG_data/socfb-Amherst41.SpaceOne', 'Name': 'socfb-Amherst41'}, {'Group': 'socfb', 'FullPath': '/cluster/scratch/bdayan/GIRG_data/socfb-Bowdoin47.SpaceOne', 'Name': 'socfb-Bowdoin47'}, {'Group': 'socfb', 'FullPath': '/cluster/scratch/bdayan/GIRG_data/socfb-Hamilton46.SpaceOne', 'Name': 'socfb-Hamilton46'}, {'Group': 'socfb', 'FullPath': '/cluster/scratch/bdayan/GIRG_data/socfb-Trinity100.SpaceOne', 'Name': 'socfb-Trinity100'}, {'Group': 'socfb', 'FullPath': '/cluster/scratch/bdayan/GIRG_data/socfb-USFCA72.SpaceOne', 'Name': 'socfb-USFCA72'}, {'Group': 'socfb', 'FullPath': '/cluster/scratch/bdayan/GIRG_data/socfb-Williams40.SpaceOne', 'Name': 'socfb-Williams40'}, {'Group': 'socfb', 'FullPath': '/cluster/scratch/bdayan/GIRG_data/socfb-Oberlin44.SpaceOne', 'Name': 'socfb-Oberlin44'}, {'Group': 'socfb', 'FullPath': '/cluster/scratch/bdayan/GIRG_data/socfb-Wellesley22.SpaceOne', 'Name': 'socfb-Wellesley22'}]
+    # for gd in graph_dicts:
+    #     fe._execute_one_graph(gd)
+    #
+    # self._dict_queue.put(None)
+    # writer_out.get()
+    # writer_pool.close()
+    # writer_pool.join()
 
 # sbatch --time=24:00:00 --ntasks=1 --cpus-per-task=12 --mem-per-cpu=2G --wrap="python do_feature_extract.py"
 # sbatch --time=24:00:00 --ntasks=1 --cpus-per-task=16 --mem-per-cpu=15G --wrap="python do_feature_extract.py"
