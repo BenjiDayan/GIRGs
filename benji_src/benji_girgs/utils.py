@@ -7,6 +7,7 @@ import networkx as nx
 import sys
 import os
 import powerlaw
+from sklearn.neighbors import KDTree
 
 # import os
 # if not "NO_CPP_GIRGS" in os.environ:
@@ -14,6 +15,8 @@ try:
     from girg_sampling import girgs
 except Exception:
     pass
+
+from benji_girgs import points
 
 def avg_degree(g: Graph):
     num_edges = g.numberOfEdges()
@@ -34,6 +37,25 @@ def graph_degrees_to_weights(g: Graph):
     """
     degrees = nk.centrality.DegreeCentrality(g).run().scores()
     return degrees
+
+def get_top_k_clique(g: Graph, k=10):
+    degrees = graph_degrees_to_weights(g)
+    argsorted = np.argsort(degrees)
+    g2 = quick_subgraph(g, argsorted[-k:])
+    return g2
+
+def empirical_graph_top_k(g):
+    degrees = graph_degrees_to_weights(g)
+    argsorted = np.argsort(degrees)
+    outs = []
+    W = np.sum(degrees)
+    for k in range(2, 20):
+        a, b = degrees[argsorted[-k]], degrees[argsorted[-k+1]]
+        outs.append((k, a, b, a*b/W))
+
+    return outs
+
+
 
 class HiddenPrints:
     def __enter__(self):
@@ -394,7 +416,7 @@ def get_largest_component(g):
     return cc.extractLargestConnectedComponent(g, True)
 
 
-def get_diffmap(g, Iweighting=0.5, eye_or_ones="eye", sparse_evals=10):
+def get_diffmap_old(g, Iweighting=0.5, sparse_evals=10, **kwargs):
     """
     Provided g is connected, find the diffusion map of g.
     w are the eigenvalues, decreasing from 1.0, lambda_2, lambda_3, ...
@@ -473,8 +495,7 @@ def get_diffmap(g, Iweighting=0.5, eye_or_ones="eye", sparse_evals=10):
 
     return w, Phi, Psi, diff_map
 
-
-def get_diffmap2(g, Iweighting=0.5, eye_or_ones="eye"):
+def get_diffmap(g, Iweighting=0.5,  sparse_evals=10, **kwargs):
     """
     Provided g is connected, find the diffusion map of g.
     w are the eigenvalues, decreasing from 1.0, lambda_2, lambda_3, ...
@@ -482,48 +503,158 @@ def get_diffmap2(g, Iweighting=0.5, eye_or_ones="eye"):
 
     eye_or_ones is experimental. Bandeira uses identity (eye), but I wonder if ones might do
     a better job here?
+
+    sparse_evals: We do things sparsely, and the sparse eigenvalue finder can actually
+    restrict to the top k eigenvalues, so we will use this. As long as you only e.g. care about
+    max the top 3 dimensions, happily set this to 10 I guess.
     """
     if nk.components.ConnectedComponents(g).run().numberOfComponents() > 1:
         raise Exception("Graph is not connected")
 
-    w, Phi, Psi, diff_map = utils.get_diffmap(g, Iweighting=0.1, eye_or_ones='eye')
 
     gnx = nk.nxadapter.nk2nx(g)
-    A = nx.linalg.adjacency_matrix(gnx).todense()
+
+    # A = nx.linalg.adjacency_matrix(gnx).todense()
+    A = nx.linalg.adjacency_matrix(gnx)
 
     D = np.array([x[1] for x in (gnx.degree)])
-    D_h = D ** (0.5)
-    D_hi = D ** (-0.5)
+    D_h = D**(0.5)
+    D_hi = D**(-0.5)
 
-    M = np.diag(1 / D) @ A
-    theta = 0.5
-    M_tilde = M @ np.diag(D ** (-theta))
-    K = M_tilde.sum(axis=1)
-    K = 1 / K
-    M_tilde = np.diag(K) @ M_tilde
-    M_tilde = 0.9 * M_tilde + 0.1 * np.eye(M_tilde.shape[0])
+    n = A.shape[0]
 
-    # M_tilde = 0.5 * M_tilde + 0.5 * M_tilde.T
 
-    # w, Phi = np.linalg.eigh(M_tilde)
+    # Empirically this gamma seems to work well.
+    # It discourages taking edges to popular nhbs.
+    gamma = 0.9
+    M_tilde = scipy.sparse.diags(1 / D) @ A @ scipy.sparse.diags(D ** (-gamma))
+    M_tilde = scipy.sparse.diags(np.array(1 / M_tilde.sum(axis=-1)).squeeze()) @ M_tilde
+    M_tilde = (1 - Iweighting) * M_tilde + Iweighting * np.eye(M_tilde.shape[0])
+    a, B = scipy.sparse.linalg.eigs(M_tilde, k=sparse_evals, which="LR")
+    a, B = np.real(a), np.real(B)
 
-    S = np.diag(1 / K) @ np.diag(D_h) @ M_tilde @ np.diag(D_hi)
-    w, V = np.linalg.eigh(S)
-    Phi = np.diag(D_hi) @ V
-    Psi = np.diag(D_h) @ V
-
-    n = Phi.shape[0]
-    w = np.flip(w)
-
-    # # Important bit!!!
-    Phi = np.diag(K) @ Phi
+    idx = np.argsort(a)[::-1]
+    a = a[idx]
+    B = B[:, idx]
 
     def diff_map(i, t):
-        # n = 5, so 0, 1, 2, 3, 4, we want to get 3, 2, 1, 0
-        # so 5-2 -> -1, -1
-        return np.array([Phi[i, j] for j in range(n - 2, -1, -1)]) * (w[1:] ** t)
+        return B[i, 1:] * a[1:] ** t
 
-    return w, Phi, Psi, diff_map
+
+    return a, B, None, diff_map
+
+# This function is quite good at fixing diffmap points to be more square like.
+# There is sometimes an issue whereby e.g. in the 2D case, fixing the 2nd dim,
+# we get an X.
+def cubify_dim(pts, k=1, perc_near=0.05, quantile=None):
+    n = pts.shape[0]
+    # only looks at dimensions 0:k
+    pts_without_k = np.concatenate([pts[:, 0:k], pts[:, k+1:]], axis=-1)
+    pts_kdtree = KDTree(pts_without_k)
+    output = []
+
+    # This is a crude filter - we only look at the 5% nearest points. We hope that the smoothness
+    # of the map is roughly ok in this range
+    num_near = int(pts.shape[0] * perc_near)
+    for u in range(n):
+        distances, indices = pts_kdtree.query(pts_without_k[u:u+1], k=num_near)
+        second_dim = pts[indices, k].squeeze()
+        u_second_dim = pts[u, k]
+        scale = 1.0 if not quantile else np.quantile(second_dim, 1 - quantile) - np.quantile(second_dim, quantile)
+        output.append(scale * scipy.stats.percentileofscore(second_dim, u_second_dim)/100)
+    return output
+
+# output = cubify_last_k_dim(pts_temp)
+# pts_temp_fixed = pts_temp.copy()
+# pts_temp_fixed[:, 1] = output
+
+# WTF is going on here? I'm confused...
+
+
+# uniformify is probably best for real life graphs
+# cubify best for true scale GIRGs
+# cuboidify might be better for preserving distorted scale?
+def get_diffmap_and_points(g, spare_evals=10, ds=2, process=None):
+    a, B, _, diff_map = get_diffmap(g, sparse_evals=spare_evals)
+    pts = np.array([diff_map(i, 10) for i in range(g.numberOfNodes())])
+    pts = pts[:, :ds]
+    if process == 'uniformify':
+        pts = uniformify_pts(pts)
+    elif process == 'cubify':
+        # so if ds=2 then just [1], if ds=3 then [2, 1], ...
+        outputs = []
+        for k in range(0, ds):
+            output = cubify_dim(pts, k=k, perc_near=0.1)
+            outputs.append(output)
+        pts = np.stack(outputs, axis=-1)
+        # pts[:, 1:] = np.concatenate(outputs, axis=-1)
+        # pts[:, 0] = percentileify(pts[:, 0])
+    elif process == 'cuboidify':
+        outputs = []
+        for k in range(0, ds):
+            output = cubify_dim(pts, k=k, quantile=0.05, perc_near=0.1)
+            # pts[:, k] = output
+            outputs.append(output)
+        pts = np.stack(outputs, axis=-1)
+        # pts[:, 0] = percentileify(pts[:, 0], 0.05)
+    elif process == 'put_in_cube':
+        pts = points.normalise_points_to_cube(pts)
+    elif process == 'restrict_uniform_edges':
+        pts = restrict_and_uniformify_edges(pts, 0.05)
+    return a, B, pts
+
+
+def percentileify(arr, quantile=None):
+    """Given a flat array, return the percentile of each element.
+
+     e.g. [0.1, 0.7, 0.2, 0.3, 0.6, 0.35]
+        ->   [0, 2, 3, 5, 4, 1]
+        ->   [0, 5, 1, 2, 4, 3]
+        i.e. 0.1 is 0th, 0.7 is 5th, 0.2 is 1st, 0.3 is 2nd, 0.6 is 4th, 0.35 is 3rd
+    """
+    if quantile is None:
+        scale = 1.0
+    else:
+        # quantile should be e.g. 0.1
+        scale = np.quantile(arr, 1 - quantile) - np.quantile(arr, quantile)
+    return scale * (arr.argsort().argsort() / arr.size)
+def uniformify_pts(pts: np.ndarray):
+    """Will uniformlyish distribute the points in the unit cube."""
+    n, d = pts.shape
+    pts_out = np.zeros_like(pts)
+    for i in range(d):
+        # e.g. [0.1, 0.7, 0.2, 0.3, 0.6, 0.35]
+        # ->   [0, 2, 3, 5, 4, 1]
+        # ->   [0, 5, 1, 2, 4, 3]
+        # i.e. 0.1 is 0th, 0.7 is 5th, 0.2 is 1st, 0.3 is 2nd, 0.6 is 4th, 0.35 is 3rd
+        pts_out[:, i] = percentileify(pts[:, i])
+    return pts_out
+
+def restrict_to_quantiles(pts, quantile=0.05):
+    foo = np.ones(pts.shape[0])
+    for d in range(pts.shape[1]):
+        p1, p2 = np.quantile(pts[:, d], (quantile, 1-quantile))
+        foo = foo * (pts[:, d] > p1) * (pts[:, d] < p2)
+
+    return pts[foo.astype(bool), :], foo.astype(bool)
+
+def restrict_and_uniformify_edges(pts, quantile=0.05):
+    """centres the central quantile to a 0.05 - 0.95 cube, and then uniformly distributes the rest."""
+    pts_new = pts.copy()
+    pts_restricted, restriction = restrict_to_quantiles(pts, quantile=quantile)
+    pts_restricted = points.normalise_points_to_cube(pts_restricted) * 0.9 + 0.05
+    pts_new[restriction, :] = pts_restricted
+
+    n, d = pts.shape
+
+    for i in range(d):
+        small = pts[:, i] < np.quantile(pts[:, i], quantile)
+        big = pts[:, i] > np.quantile(pts[:, i], 1-quantile)
+        pts_new[small, i] = (pts_new[small, i].argsort().argsort() / small.sum()) * 0.05
+        pts_new[big, i] = 0.95 + (pts_new[big, i].argsort().argsort() / big.sum()) * 0.05
+
+    return pts_new
+
 
 
 

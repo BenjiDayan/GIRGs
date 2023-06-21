@@ -18,7 +18,9 @@ def worker_func(i):
     out = np.asscalar(np.sum(X_np[i, :]))
     temp = X_np[0, 0]
     X_np[0, 0] = i
-    return i, out, temp, os.getpid()
+    name = os.getpid()
+    print(f'i: {i}, name: {name}, out: {out}, temp: {temp}')
+    return i, out, temp, name
 
 if __name__ == '__main__':
     X_shape = (50, 1000)
@@ -33,7 +35,9 @@ if __name__ == '__main__':
         # print('Results (pool): \n', np.array(result))
 
         results = pool.imap_unordered(worker_func, range(X_shape[0]))
-        for i, out, temp, name in results:
-            print(f'i: {i}, name: {name}, out: {out}, temp: {temp}')
+        # for i, out, temp, name in results:
+        #     print(f'i: {i}, name: {name}, out: {out}, temp: {temp}')
+
+    time.sleep(10)
     print(f'Time: {time.time() - start_time}')
 

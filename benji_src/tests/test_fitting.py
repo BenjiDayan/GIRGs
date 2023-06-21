@@ -1,8 +1,9 @@
 import pytest
-from benji_girgs import generation, points, utils, fitting
+from benji_girgs import generation, points, utils, fitting, mcmc
 import networkit as nk
 import numpy as np
 import networkx as nx
+
 
 n = 1500
 d = 1
@@ -36,7 +37,7 @@ def test_simple_cube_mcmc_class():
                                                                 points_type=points.PointsCube)
 
     weights = np.array(utils.graph_degrees_to_weights(g))
-    mcmc = fitting.MCMC_girg(g, weights, alpha, const)
+    mcmc = mcmc.MCMC_girg(g, weights, alpha, const)
 
     print('running mcmc')
     mcmc.run(1000)

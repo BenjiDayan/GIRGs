@@ -1,3 +1,4 @@
+import pickle
 import sys
 sys.path.append('../nemo-eva/src/')
 
@@ -15,7 +16,7 @@ import os
 import do_feature_extract
 import networkit
 
-from benji_girgs import utils, mcmc
+from benji_girgs import utils, mcmc, generation, points
 import networkit as nk
 import networkx as nx
 
@@ -73,69 +74,120 @@ df.Info = df.Info.apply(lambda temp: {key: eval(var) for key, var in [x.split('=
     })
 df['alpha'] = df.Info.apply(lambda x: x['alpha'] if 'alpha' in x else 1/float(x['t']) if 't' in x else None)
 
-os.environ['DATA_PATH'] = '/cluster/home/bdayan/girgs/MCMC_run8/'
+os.environ['DATA_PATH'] = '/cluster/home/bdayan/girgs/MCMC_runs/'
 
 mini_df = df.loc[df.Model == '1d-copyweight-cube-girg'].sort_values('Nodes').loc[:,['Graph', 'Model', 'Nodes', 'Info'] ]
 
-
+pickle_path = '../MCMC_runs/pickles/'
 
 import multiprocessing
 if __name__ == '__main__':
     print('running MCMC')
 
-    for j, graph_name in enumerate(mini_df.Graph):
-        if j < 10:
+    for fn in os.listdir(pickle_path)[2:]:
+        sep_index = fn[::-1].index('-')
+        d = int(fn[-sep_index])
+        print(f'pickle file: {fn}')
+        print(f'd: {d}')
+        try:
+            with open(pickle_path + fn, 'rb') as file:
+                MC = pickle.load(file)
+        except Exception:
             continue
-        # if j > 4:
-        #     break
-        print(f'processing: {graph_name}')
-        temp = df.loc[df.Graph == graph_name].sort_values('Model')
 
-        gd = list(filter(lambda x: x['Name'] == graph_name, do_feature_extract.graph_dicts))[0]
-        in_path = gd['FullPath']
-        g = nk.readGraph(in_path, nk.Format.EdgeListSpaceOne)
-        g = utils.get_largest_component(g)
+        print(fn)
+        g = MC.g
+
+        # g = nk.readGraph(in_path, nk.Format.EdgeListSpaceOne)
+        # g = utils.get_largest_component(g)
+
         nk.overview(g)
 
         n = g.numberOfNodes()
-##################
-        # gnx = nk.nxadapter.nk2nx(g)
-        # A = nx.linalg.adjacency_matrix(gnx).todense()
+
+
+
+        # fig, ax1 = plt.subplots()
+        # ax2 = ax1.twinx()
         #
-        # g_degs = [g.degree(i) for i in range(g.numberOfNodes())]
+        # iterations = int(n * 250 * d)
+        # MC.run_pool(iterations, pool_size=14, jobs_per_worker=100, plot_every=20000, use_tqdm=False)
+        # MC.pickle()
+
+        ######### We redo things with an e to see if it makes a difference.
+        # Note this should make our alpha estimation kind of funky but ah well....
+        self = MC
+        const = self.const
+        const_in = generation.const_conversion(const, self.alpha, d=self.d, true_volume=True)
+        e = 0.5
+
+
+        print('calibrating const')
+        for _ in range(7):
+            # self.ll, self.expected_num_edges = self.calculate_ll()
+            ll = 0
+            expected_num_edges = 0
+            for u_index in range(self.n):
+                eps = 1e-7
+                p_u_to_vs = generation.get_probs_u(self.weights, self.pts, self.alpha, const_in, u_index)
+                p_u_to_vs = e * p_u_to_vs
+                expected_num_edges += p_u_to_vs.sum()
+                p_u_to_vs = np.clip(p_u_to_vs, eps, 1 - eps)
+                u_ll = self.p_u_to_vs_to_ll(self.g, u_index, p_u_to_vs)
+                ll += u_ll
+
+            expected_num_edges = expected_num_edges/2
+
+            print(f'const: {const}, expected_num_edges: {expected_num_edges}')
+            ratio = expected_num_edges / self.g.numberOfEdges()
+            const = const / ratio
+            const_in = generation.const_conversion(const, self.alpha, d=self.d, true_volume=True)
+
+        print(f'final LL: {ll}')
+
+        g_out, A_out, out, percent_edges_captured, percent_fake_edges_wrong = self.get_CM(self.A)
+        print(f'MC pec, pfew before: {percent_edges_captured}, {percent_fake_edges_wrong}')
+        print(out)
+
+        # g_out, A_out = self.MC_to_g_A()
+        tau = 2.1  # Ignored
+        g_out, edges, weights, pts, const = generation.generate_GIRG_nk(
+            self.n, self.d, tau, self.alpha, weights=self.weights_original,
+            const=const,
+            pts=self.pts,
+            points_type=points.PointsCube,
+            e=e)
+
+
+        gnx = nk.nxadapter.nk2nx(g_out)
+        A_out = nx.linalg.adjacency_matrix(gnx).todense()
+        out, percent_edges_captured, percent_fake_edges_wrong = mcmc.CM(self.A, A_out)
+
+        print(f'MC pec, pfew after: {percent_edges_captured}, {percent_fake_edges_wrong}')
+        print(out)
+
+        print()
+
+        ###################
+
+        # for i in range(len(temp)):
+        #     alpha, const = temp.iloc[i].Info['alpha'], temp.iloc[i].Info['const']
         #
-        # argsorted = np.argsort(g_degs)[::-1]
-        # fe = feature_extractor.FeatureExtractor([])
         #
-        # cl = fe.fit_chung_lu(g)
-        # gnx = nk.nxadapter.nk2nx(cl)
-        # A_cl = nx.linalg.adjacency_matrix(gnx).todense()
-        # # A_cl = A_cl[:, argsorted][argsorted, :]
+        #     g, A, weights, const, pts, MC = mcmc.g_initialised_mcmc(g, alpha=alpha, const=const, pts_d=i+1,
+        #                                                             diffmap_init=True, graph_name=graph_name + f'-{i+1}d')
         #
-        # out, p1, p2 = mcmc.CM(A[:, argsorted][argsorted, :], A_cl)
-        # print(p1, p2)
-        # print(out)
-
-######################
-
-        for i in range(len(temp)):
-            alpha, const = temp.iloc[i].Info['alpha'], temp.iloc[i].Info['const']
-
-
-            g, A, weights, const, pts, MC = mcmc.g_initialised_mcmc(g, alpha=alpha, const=const, pts_d=i+1,
-                                                                    diffmap_init=True, graph_name=graph_name + f'-{i+1}d')
-
-            g_dm, A_dm = MC.MC_to_g_A()
-            print(MC.outs[0])
-            print(MC.percent_edges_captureds[0])
-
-            fig, ax1 = plt.subplots()
-            ax2 = ax1.twinx()
-
-            # e.g. Caltech 762 with d=1 is about 300K iterations
-            iterations = int(n * 450 * (i+1))
-            MC.run_pool(iterations, pool_size=14, jobs_per_worker=100, plot_every=20000, use_tqdm=False)
-            MC.pickle()
+        #     g_dm, A_dm = MC.MC_to_g_A()
+        #     print(MC.outs[0])
+        #     print(MC.percent_edges_captureds[0])
+        #
+        #     fig, ax1 = plt.subplots()
+        #     ax2 = ax1.twinx()
+        #
+        #     # e.g. Caltech 762 with d=1 is about 300K iterations
+        #     iterations = int(n * 450 * (i+1))
+        #     MC.run_pool(iterations, pool_size=14, jobs_per_worker=100, plot_every=20000, use_tqdm=False)
+        #     MC.pickle()
 
 
-# sbatch --time=24:00:00 --ntasks=1 --cpus-per-task=15 --mem-per-cpu=4G --wrap="python do_MCMC.py"
+# sbatch --time=24:00:00 --ntasks=1 --cpus-per-task=15 --mem-per-cpu=4G --wrap="python do_MCMC_reload.py"

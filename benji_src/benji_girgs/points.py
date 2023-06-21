@@ -49,7 +49,7 @@ class PointsTorus(Points):
         return obj
 
     def dists(self):
-        return get_dists(self.astype(np.float16))
+        return get_dists(self.astype(np.float16), self.astype(np.float16))
 
     def dist(self, other):
         return get_dist(self.astype(np.float16), other.astype(np.float16))
@@ -65,7 +65,7 @@ class PointsTorus2(PointsTrue):
         return obj
 
     def dists(self, b_vec=None):
-        return 2*get_dists(self.astype(np.float16), b_vec=b_vec)
+        return 2*get_dists(self.astype(np.float16), self.astype(np.float16), b_vec=b_vec)
 
     def dist(self, other, b_vec=None):
         return 2*get_dist(self.astype(np.float16), other.astype(np.float16), b_vec=b_vec)
@@ -83,8 +83,10 @@ class PointsCube(PointsTrue):
         # Finally, we must return the newly created object:
         return obj
 
-    def dists(self, b_vec=None):
-        return 2*get_dists_cube(self.astype(np.float16), b_vec=b_vec)
+    def dists(self, other=None, b_vec=None):
+        if other is None:
+            other = self
+        return 2*get_dists_cube(self.astype(np.float16), other.astype(np.float16), b_vec=b_vec)
 
     def dist(self, other, b_vec=None):
         return 2*get_dist_cube(self.astype(np.float16), other.astype(np.float16), b_vec=b_vec)
@@ -225,12 +227,12 @@ def get_dists2(torus_points: np.ndarray, torus_side_length):
 
 # Minimal extra memory
 # This one seems hella faster
-def get_dists(torus_points: np.ndarray, max=True, b_vec=None):
-    diff = np.abs(torus_points[:, None, :] - torus_points[None, :, :])
+def get_dists(torus_points1: np.ndarray, torus_points2: np.ndarray, max=True, b_vec=None):
+    diff = np.abs(torus_points1[:, None, :] - torus_points2[None, :, :])
     torus_diff = np.minimum(diff, 1 - diff)
     if b_vec is not None:
         # should be (d,) and (n, d)
-        assert b_vec.shape[0] == torus_points.shape[1]
+        assert b_vec.shape[0] == torus_points1.shape[1]
         torus_diff *= b_vec
     # dists = np.linalg.norm(torus_diff, ord=np.inf, axis=-1)
     dists = torus_diff.max(axis=-1) if max else torus_diff.min(axis=-1)
@@ -255,13 +257,14 @@ def get_dists_julia(torus_points: np.ndarray):
     return get_dists(torus_points, max=True)
 
 
-def get_dists_cube(points: np.ndarray, b_vec=None):
+def get_dists_cube(points1: np.ndarray, points2: np.ndarray, b_vec=None):
     if b_vec is not None:
         # should be (d,) and (n, d)
-        assert b_vec.shape[0] == points.shape[1]
-        points *= b_vec
+        assert b_vec.shape[0] == points1.shape[1]
+        points1 *= b_vec
+        points2 *= b_vec
 
-    return np.linalg.norm(points[:, None, :] - points[None, :, :], ord=np.inf, axis=-1)
+    return np.linalg.norm(points1[:, None, :] - points2[None, :, :], ord=np.inf, axis=-1)
 
 def get_dist_cube(points1: np.ndarray, points2: np.ndarray, b_vec=None):
     if b_vec is not None:

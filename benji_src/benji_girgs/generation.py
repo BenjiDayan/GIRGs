@@ -3,7 +3,8 @@ import networkx as nx
 import numpy as np
 from networkit.graph import Graph
 
-from benji_girgs.utils import get_perc_lower_common_nhbs
+from benji_girgs.utils import get_perc_lower_common_nhbs, graph_degrees_to_weights
+from benji_girgs import mcmc
 
 try:
     from girg_sampling import girgs
@@ -22,6 +23,65 @@ def torus_uniform(d: int = 2, n: int = 1000) -> np.ndarray:
     """uniformly sample from the torus"""
     torus_side_length = n**(1/d)
     return np.random.uniform(high=torus_side_length, size=(n, d))
+
+
+def chung_lu_fit_c(g, weights):
+    """p_uv = min(1, c wu wv / W)
+    we have to fit c so that sum p_uv is about the degree of g.
+    We will do this in a dumb way...
+    Basically we will assume that there is no need for min.
+    Should hold for sparse graphs
+
+    e.g. weights could be the degree sequence
+    """
+    num_edges = g.numberOfEdges()  # = (1/2) Sum p_uv
+    W = np.sum(weights)
+    c = 1.0
+    # triggered will ensure that c goes just small enough so that probs now less than 1
+    triggered = False
+    for _ in range(10):
+        probs = np.minimum(c * np.outer(weights, weights) / W, 1)
+        E_edges = probs.sum() - np.diag(probs).sum()
+        E_edges = E_edges / 2
+        c = c * (num_edges / E_edges)
+
+    probs = np.minimum(c * np.outer(weights, weights) / W, 1)
+
+    # c_copy = c
+    # E_edges = probs.sum() - np.diag(probs).sum()
+    # E_edges = E_edges / 2
+    # c = c * (num_edges / E_edges)
+    #
+    # # If all went well, c < c_copy. Otherwise we're at risk of violating the
+    # # minimum thi
+    return c, probs
+
+
+def chung_lu_ll(g, c, weights):
+    probs = c * np.outer(weights, weights) / W
+
+def ER_ll(g):
+    n, E = g.numberOfNodes(), g.numberOfEdges()
+    p = E / n*(n-1)/2
+    probs = np.ones(shape=(n,n))/2
+    return g_probs_to_ll(g, probs)
+
+def g_probs_to_ll(g, probs):
+    ll = 0
+    for u_index in range(g.numberOfNodes()):
+        eps=1e-7
+        p_u_to_vs = probs[u_index, :]
+        p_u_to_vs = np.clip(p_u_to_vs, eps, 1 - eps)
+        u_ll = mcmc.MCMC_girg.p_u_to_vs_to_ll(g, u_index, p_u_to_vs)
+        ll += u_ll
+    return ll
+
+# def g_probs_ll(g, probs):
+#     out = 0
+#
+#     for p_u_to_vs:
+
+
 
 
 def powerlaw_dist(tau=2.5, x_min=1, n=1000):
@@ -80,6 +140,18 @@ def get_probs_u(weights: np.ndarray, pts: Points, alpha, const, u_index):
     p_uv = np.minimum(const * p_uv, 1)
     return p_uv  # note this is a vector of length n, so includes a self loop at u_index
 
+def get_probs_us(weights: np.ndarray, pts: Points, alpha, const, u_index):
+    """
+    Computes min(1, w_u w_v / ||x_u - x_v||_inf^d)^alpha for a given u
+    """
+    n, d = pts.shape
+    wuwv = np.outer(weights[u_index], weights)
+    dists = pts[u_index].dists(pts)
+    p_uv = np.divide(wuwv, dists**d)
+    p_uv = np.power(p_uv, alpha)
+    p_uv = np.minimum(const * p_uv, 1)
+    return p_uv  # note this is a vector of length n, so includes a self loop at u_index
+
 ################# NB The below note is now deprecated as I changed Torus points in general to be in a cube of side
 # length 1 rather than n^(1/d). This is because the CGIRG code does this and it makes it easier to compare.
 ########  NB in order to match up with the CGIRGs we need to do something like this:
@@ -119,6 +191,76 @@ def get_probs_u(weights: np.ndarray, pts: Points, alpha, const, u_index):
 # g = nk.nxadapter.nx2nk(nx.from_numpy_array(edges))
 # nk.overview(g)
 
+def characterise_girg_edges(g, adj_mat, weights, pts, const, alpha, d):
+    points_type = type(pts)
+    true_volume = PointsTrue in points_type.__mro__
+    const_in = const_conversion(const, alpha, d=d, true_volume=true_volume)
+    probs = get_probs(weights/np.sqrt(np.sum(weights)), pts, alpha, const_in)
+    edge_list = upper_triangular_to_edgelist_fastest(adj_mat)
+    out_list = []
+    for u, v in edge_list:
+        out_list.append((u, v, weights[u], weights[v], probs[u, v]))
+    return out_list, probs
+
+def e_statistic(g, q):
+    """
+    In theory we only consider triples (u, v, y) where u, v are small_d, y is big_d, and both
+    u?y, v?y should be 100%
+
+    If a 100% edge exists with probability e <= 1, and all edges are 100% edges.
+    Then we're looking at triples (u-v) - ? - y
+    Given that u-v and say u-y, then v-y is a 100% edge and exists with probability e
+
+    with prob e^2, both u-y, v-y. with prob 2e(1-e), just one of u-y, v-y.
+    with prob (1-e)^2, neither u-y, v-y.
+    Hence num_missing is # of cases of 2e(1-e), and num_triangles is # of cases of e^2.
+
+    So then e.g. K = T/M = e^2 / 2e(1-e)
+    So then e = 2K / (1+2K)
+
+    In actuality it's more like maybe 0.3-0.6 of edges are 100% edges, and the rest are maybe
+    0-80%.
+
+    Maybe simplify: 50% of edges are 100% edges, and 50% are 10% edges.
+    Then we have
+    1: both u,v -y: 0.5 (e^2) + 0.5 (0.1^2 e^2)
+    2: one of u,v -y: 0.5 (2e(1-e)) + 0.5 ( 2 * 0.1 e [0.1(1-e) + 0.9] )
+
+    This gives about 2.2 K / (1.01 + 2.01 K)
+
+    """
+    degrees = graph_degrees_to_weights(g)
+    small_d, big_d = np.quantile(degrees, [q, 1-q])
+
+    num_missing = 0
+    num_triangles = 0
+
+    for u in g.iterNodes():
+        if g.degree(u) <= small_d:
+            u_small_nhbs = set()
+            u_big_nhbs = set()
+            for x in g.iterNeighbors(u):
+                if g.degree(x) <= small_d:
+                    u_small_nhbs.add(x)
+                elif g.degree(x) >= big_d:
+                    u_big_nhbs.add(x)
+
+            for v in u_small_nhbs:
+                for y in u_big_nhbs:
+                    if g.hasEdge(v, y):
+                        num_triangles += 1
+                    else:
+                        num_missing += 1
+
+
+    # triangles are double counted: once for u -> v; u -> y and once for v -> u; v -> y
+    # missing are single counted: once for u -> v; u -> y but not for v -> y; v -> y
+    #  (if it's v -> y which is the missing triangle link)
+    num_triangles /= 2
+
+    return num_missing, num_triangles
+
+
 
 def generateEdges(
     weights: np.ndarray,
@@ -127,6 +269,7 @@ def generateEdges(
     *,
     const: float = 1.0,
     seed: int = None,
+    e: float = 1.0
 ) -> np.ndarray:
     """Generates edges for a GIRG with given
     weights: (n,) array of weights
@@ -139,6 +282,7 @@ def generateEdges(
     if not issubclass(type(positions), Points):
         positions = PointsTorus(positions)
     probs = get_probs(weights, positions, alpha, const)
+    probs *= e
     unif_mat = np.random.uniform(size=probs.shape)
     # upper triangular matrix - lower half and the diagonal zeroed
     # Since we want only one coin flip per (i, j) edge not two different
@@ -213,8 +357,11 @@ def const_conversion(const, alpha, d=None, true_volume=False):
 def generate_GIRG_nk(n, d, tau, alpha,
                      desiredAvgDegree=None,
                      const=None, weights: Optional[np.ndarray] = None,
-                     points_type=PointsTorus,
-                     c_implementation=False):
+                     weights_sum: Optional[float] = None,
+                     points_type: Points = PointsTorus,
+                     pts: Optional[np.ndarray] = None,
+                     c_implementation=False,
+                     e=1):
     """Generate a GIRG of n vertices, with power law exponent tau, dimension d and alpha
 
     NB if the cube version is used, an edge list (pairs (u, v)) is returned instead of an adjacency matrix
@@ -222,14 +369,27 @@ def generate_GIRG_nk(n, d, tau, alpha,
     We should try and phase out direct use of cgirg_gen, and use this as a wrapper instead. Code is messy!
     c_implementation only does normal torus GIRGs, no min / mixed / cube GIRGs. Once phased out, all
     the weights (None?) and const/desiredAvgDegree (None?) stuff should only remain in this function.
+
+    NB pts should be an np.ndarray, and points_type is really what matters for the geometry.
+        -> Don't pass in pts of type Cube and expecting it to work as a cube!
+
+    If weights_sum is passed in, we're actually subsampling a larger n' > n GIRG which has weight_sum W given.
+    This is used in top_k_clique estimation
     """
     # nx.from_numpy_matrix goes from an adjacency matrix. It actually
     # works fine from an upper triangular matrix (with zeros on the diagonal)
     # so all good!
-    if points_type is PointsCube:  # This is our only Cube GIRG implementation so far
-        gnk, edges, weights, pts, const = generate_GIRG_nk(n, d, tau, alpha, desiredAvgDegree, const, weights, PointsTorus2)
+    if points_type is PointsCube or (pts is not None and type(pts) is PointsCube):  # This is our only Cube GIRG implementation so far
+        gnk, edges, weights, pts, const = generate_GIRG_nk(n, d, tau, alpha,
+            desiredAvgDegree=desiredAvgDegree,
+            const=const,
+            weights=weights,
+            weights_sum=weights_sum,
+            points_type=PointsTorus2,
+            pts=PointsTorus2(pts) if pts is not None else None,
+            e=e)
         edges = np.array(upper_triangular_to_edgelist_fastest(edges))
-        gnk, edges, weights, pts, const = girg_cube_coupling(gnk, edges, weights, pts, const, alpha, PointsCube)
+        gnk, edges, weights, pts, const = girg_cube_coupling(gnk, edges, weights, pts, const, alpha, PointsCube, W=np.sum(weights))
         return gnk, edges, weights, pts, const
 
     if c_implementation:
@@ -256,13 +416,15 @@ def generate_GIRG_nk(n, d, tau, alpha,
     # This is necessary because the c from girgs.scaleWeights is actually used for w_i -> c w_i.
     # This makes w_u w_v / W -> c w_u w_v / W, and so the true c' (w_u w_v/W / r^d)^alpha is c' = c^alpha
     # const_in = const_in ** alpha
-    print(f'const_in: {const_in}')
+    # print(f'const_in: {const_in}')
 
-    pts = generatePositions(n, d)
-    pts = points_type(pts)
+    if pts is None:
+        pts = generatePositions(n, d)
+        pts = points_type(pts)
 
     # note / np.sqrt(np.sum(weights)), s.t. w_u w_v -> (w_u / sqrt(W)) (w_v / sqrt(W)) = w_u w_v / W
-    adj_mat = generateEdges(weights / np.sqrt(np.sum(weights)), pts, alpha, const=const_in)
+    weight_normaliser = np.sqrt(np.sum(weights)) if weights_sum is None else np.sqrt(weights_sum)
+    adj_mat = generateEdges(weights / weight_normaliser, pts, alpha, const=const_in, e=e)
     # adj_mat = generateEdges(scaled_weights, pts, alpha, const=1.0)
 
     # g = nk.nxadapter.nx2nk(nx.from_numpy_array(edges))
@@ -392,7 +554,7 @@ def cgirg_gen_cube_coupling(n, d, tau, alpha, desiredAvgDegree=None, const=None,
 
     return gnk, edges[~to_remove], weights, pts, const
 
-def girg_cube_coupling(gnk, edges: np.ndarray, weights: np.ndarray, pts: Points, const, alpha, cube_type: Type[PointsCube]):
+def girg_cube_coupling(gnk, edges: np.ndarray, weights: np.ndarray, pts: Points, const, alpha, cube_type: Type[PointsCube], W: Optional[float] = None):
     """
     edges should be a [(u, v), ...] 2d array of edges
     Uses pts.dist method vs cube_type(pts).dist method as the coupling differentiation
@@ -405,7 +567,8 @@ def girg_cube_coupling(gnk, edges: np.ndarray, weights: np.ndarray, pts: Points,
     d = pts.shape[1]
     const_in = const_conversion(const, alpha, d=d, true_volume=True)
 
-    W = np.sum(weights)
+    if W is None:
+        W = np.sum(weights)
     d = pts.shape[1]
 
     u, v = edges[:, 0], edges[:, 1]
