@@ -4,6 +4,7 @@ We outline the key elements of GIRGs and the main variations and how they fit in
 
 The GIRG definition according to \cite{bringmann2019geometric} is a random graph model defined by the edge connection probabilities
 
+TODO below (div by n, infty norm) is what I had before, but in fact bringmann2019geometric uses below with div by W and ambiguous norm.
 \begin{equation}
     p_{uv} = \Theta \left ( \min \left \{ 
         1,
@@ -14,25 +15,39 @@ The GIRG definition according to \cite{bringmann2019geometric} is a random graph
     \right )
 \end{equation}
 
-% \begin{equation}
-%     p_{uv} = \Theta \left ( \min \left \{ 
-%         1,
-%         c \left (
-%             \frac{w_u w_v / W}{\norm{x_u - x_v}_\infty^d}
-%         \right )^\alpha    
-%     \right \}
-%     \right )
-% \end{equation}
+\begin{equation}
+    p_{uv} = \Theta \left ( \min \left \{ 
+        1,
+        c \left (
+            \frac{w_u w_v / W}{\norm{x_u - x_v}^d}
+        \right )^\alpha    
+    \right \}
+    \right )
+\end{equation}
 
 where $(w_u)_{u \in V}$ are node specific weights and $(x_u \in \chi)_{u \in V}$ are positions in some geometric space $\chi$, generally taken to be the d-dimensional torus or cube of side length 1.
 
 This edge probability has a geometric factor from the distance $r_{uv} = \norm{x_u - x_v}_\infty$, and is proportional to $r_{uv}^{-d \alpha}$, where $\alpha > 0$, meaning that close by nodes are more likely to be connected. The $n^{-1}$ normalising factor ensures that as $n \to \infty$, expected node degrees are unchanged.
 
-Like Chung-Lu, the weight sequences are usually assumed to follow a powerlaw distribution with an exponent $\tau \in (2, 3)$ (at least within some tolerance and in the large weight tail). This means that many results for Chung-Lu carry through automatically into GIRGs.
+We often write $\rho_{uv} = \left ( \frac{w_u w_v / W}{\norm{x_u - x_v}^d} \right )$ to save on writing.
 
-A key property of the GIRG model is that marginalising over possible node locations gives that $E_{x_v}[p_{uv} | x_u, w_u, w_v] = \Theta(\min\{1, \frac{w_u w_v}{n} \})$, which matches the Chung-Lu GGM. For this to hold we actually need to have $\alpha > 1$ - otherwise there are too many long distance edges. Essentially $\alpha > 1$ depresses the number of long distance edges to be $\Theta(\min\{1, \frac{w_u w_v}{W} \})$. No matter how large $\alpha$ is, there will always be $\Theta(\min\{1, \frac{w_u w_v}{W} \})$ short distance edges: $u \sim v$ where $p_{uv} = 1$.
+\paragraph{power law degree sequence} Like Chung-Lu, the weight sequences are usually assumed to follow a powerlaw distribution with an exponent $\tau \in (2, 3)$ (at least within some tolerance and in the large weight tail).
+\begin{align*}
+\eqname{exact power law distribution}
+& W \sim \powerlaw(\tau)
+\\
+\eqname{pdf (default $x_{\min } = 1$)}
+& p(w) = w^{-\tau} \text{ for } w \in [x_{\min }, \infty]
+\\
+& p(W \geq w) \propto w^{1 - \tau}
+\end{align*}
+% A general In practice a power law degree sequence is required to have a looser version of $\# \{w_u | w_u \geq w\} = \Theta(w^{1 - \tau})$.
+This is a heavy tailed distribution (heavier than exponentially decaying tails). $\tau > 2$ is important to ensure that $E[W] = \Theta(1)$. This means that although we may in a sequence of $w_1, ..., w_n$ have some very large $w_i$, still the majority of the total weight is in the small valued $w_i$'s. 
 
-The exact geometry $\chi$, and the distance function $\norm{\cdot}$ can vary a great deal without affecting the key properties of GIRGs. $\chi = \T_d$ the d-dimensional torus is very handy for proofs, as the viewpoint of any node $x_u$ is equivalently at the "centre" of the space. If $\chi = [0, 1]^d$ the d-dimensional cube, if $x_u$ is at the edge of the cube, then it has a different viewpoint to a node at the centre of the cube.
+
+\paragraph{Similarity to Chung-Lu} A key property of the GIRG model is that marginalising over possible node locations gives that $E_{x_v}[p_{uv} | x_u, w_u, w_v] = \Theta(\min\{1, \frac{w_u w_v}{n} \})$, which matches the Chung-Lu GGM. This means that many results for Chung-Lu carry through automatically into GIRGs, like simple facts that $E[d_u] = \Theta(w_u)$ (the expected degree of a node of a fixed weight is proportional to that weight). For this to hold we actually need to have $\alpha > 1$ - otherwise there are too many long distance edges. Essentially $\alpha > 1$ depresses the number of long distance edges to be $\Theta(\min\{1, \frac{w_u w_v}{W} \})$. No matter how large $\alpha$ is, there will always be $\Theta(\min\{1, \frac{w_u w_v}{W} \})$ short distance edges: $u \sim v$ where $p_{uv} = 1$.
+
+\paragraph{Geometry} The exact geometry $\chi$, and the distance function $\norm{\cdot}$ can vary a great deal without affecting the key properties of GIRGs. $\chi = \T_d$ the d-dimensional torus is very handy for proofs, as the viewpoint of any node $x_u$ is equivalently at the "centre" of the space. For real applications the d-dimensional cube $\chi = [0, 1]^d$ can be more realistic, but then if $x_u$ is at the edge of the cube it has a different viewpoint to a node more at the centre of the cube.
 
 Taking $\norm{\cdot} = \norm{\cdot}_\infty$ is also useful, but can be replaced equivalently by euclidean or other norms. The minimum component distance $\norm{x} = \min_i |x_i|$ is not a norm, but still holds retains most of the GIRG properties. This can make sense in that two nodes might have a higher edge probability by being close in one dimension, rather than every dimension.
 

@@ -10,6 +10,8 @@
 \usepackage{algpseudocode}
 \usepackage{graphicx}
 \usepackage{subcaption}
+\usepackage{bm}
+\usepackage{tikz}
 
 
 
@@ -39,8 +41,8 @@
 \newcommand{\norm}[1]{\left\lVert #1\right\rVert}
 \newcommand{\normalorder}[1]{\mathop{:}\nolimits\!#1\!\mathop{:}\nolimits}
 \newcommand{\tv}[1]{|#1|}
-\renewcommand{\vec}[1]{\boldsymbol{\mathbf{#1}}}
-
+% \renewcommand{\vec}[1]{\boldsymbol{\mathbf{#1}}}
+\renewcommand{\vec}[1]{\bm{#1}}
 % Probability
 \DeclareMathOperator{\Bernoulli}{Bernoulli}
 \DeclareMathOperator{\betaD}{beta}
@@ -70,6 +72,7 @@
 % Other
 \DeclareMathOperator*{\argmax}{arg\,max}
 \DeclareMathOperator*{\argmin}{arg\,min}
+\newcommand{\eqname}[1]{\tag*{#1}}% Tag equation with name
 
 
 
@@ -82,5 +85,5 @@
 \renewcommand{\epsilon}{\ensuremath\varepsilon}
 
 %% Also set the alternate phi as default.
-\let\oldphi\phi
-\renewcommand{\phi}{\ensuremath{\varphi}}
+% \let\oldphi\phi
+% \renewcommand{\phi}{\ensuremath{\varphi}}
