@@ -3,7 +3,7 @@ import networkx as nx
 import numpy as np
 from networkit.graph import Graph
 
-from benji_girgs.utils import get_perc_lower_common_nhbs, graph_degrees_to_weights
+from benji_girgs.utils import get_perc_lower_common_nhbs, graph_degrees_to_weights, graph_degrees_to_weights
 from benji_girgs import mcmc
 
 try:
@@ -56,9 +56,20 @@ def chung_lu_fit_c(g, weights):
     # # minimum thi
     return c, probs
 
+def fit_chung_lu(g, seed=None):
+    nk.setSeed(seed=42 if seed is None else seed, useThreadId=False)
+    return nk.generators.ChungLuGenerator.fit(g).generate()
 
-def chung_lu_ll(g, c, weights):
-    probs = c * np.outer(weights, weights) / W
+def chung_lu_get_stuff(g):
+    weights = graph_degrees_to_weights(g)
+    c, probs_cl = chung_lu_fit_c(g, weights)
+    chung_lu_ll = g_probs_to_ll(g, probs_cl)
+    er_ll = ER_ll(g)
+
+    g_cl = fit_chung_lu(g)
+    g_cl_nx = nk.nxadapter.nk2nx(g_cl)
+    A_cl = nx.linalg.adjacency_matrix(g_cl_nx).todense()
+    return chung_lu_ll, er_ll, A_cl, probs_cl
 
 def ER_ll(g):
     n, E = g.numberOfNodes(), g.numberOfEdges()
@@ -269,7 +280,7 @@ def generateEdges(
     *,
     const: float = 1.0,
     seed: int = None,
-    e: float = 1.0
+    failure_rate: float = 0.0
 ) -> np.ndarray:
     """Generates edges for a GIRG with given
     weights: (n,) array of weights
@@ -282,7 +293,7 @@ def generateEdges(
     if not issubclass(type(positions), Points):
         positions = PointsTorus(positions)
     probs = get_probs(weights, positions, alpha, const)
-    probs *= e
+    probs *= (1-failure_rate)
     unif_mat = np.random.uniform(size=probs.shape)
     # upper triangular matrix - lower half and the diagonal zeroed
     # Since we want only one coin flip per (i, j) edge not two different
@@ -354,6 +365,35 @@ def const_conversion(const, alpha, d=None, true_volume=False):
         out *= (2**d)
     return out**alpha
 
+def chung_lu_mixin_graph(g, weights, cl_mixin_prob):
+    g_out = nk.Graph(g.numberOfNodes())
+    c, probs_cl = chung_lu_fit_c(g, weights)
+    cl_override_mat = np.random.uniform(size=probs_cl.shape) < cl_mixin_prob
+    # we only need to upper triangular one as doing an instersection
+    cl_override_mat = np.triu(cl_override_mat, 1)
+
+    cl_edges_mat = np.random.uniform(size=probs_cl.shape) < probs_cl
+    cl_edges_mat = np.triu(cl_edges_mat, 1)
+
+    # Simple mixin strategy:
+    # For each pair (u,v), flip coin (cl_mixin_prob)
+    # If Heads, go with edge/non edge in original, otherwise edge/non edge in cl graph
+    # So if edge in both, then edge in new graph; non-edge in both, then non-edge in new graph
+    # if edge in one, non-edge in other, then see coin flip
+
+    for u, v in g.iterEdges():
+        u, v = min(u, v), max(u, v)
+        # if edge also in cl graph, or flipped to be in original then include
+        if not cl_override_mat[u, v] or cl_edges_mat[u, v]:
+            g_out.addEdge(u, v)
+
+    for u, v in zip(*np.nonzero(cl_edges_mat)):
+        # already added edge if in both; just check coin flip for non-edge in original
+        if not g.hasEdge(u, v) and cl_override_mat[u, v]:
+            g_out.addEdge(u, v)
+    return g_out
+
+
 def generate_GIRG_nk(n, d, tau, alpha,
                      desiredAvgDegree=None,
                      const=None, weights: Optional[np.ndarray] = None,
@@ -361,7 +401,7 @@ def generate_GIRG_nk(n, d, tau, alpha,
                      points_type: Points = PointsTorus,
                      pts: Optional[np.ndarray] = None,
                      c_implementation=False,
-                     e=1):
+                     failure_rate=0.0):
     """Generate a GIRG of n vertices, with power law exponent tau, dimension d and alpha
 
     NB if the cube version is used, an edge list (pairs (u, v)) is returned instead of an adjacency matrix
@@ -387,7 +427,7 @@ def generate_GIRG_nk(n, d, tau, alpha,
             weights_sum=weights_sum,
             points_type=PointsTorus2,
             pts=PointsTorus2(pts) if pts is not None else None,
-            e=e)
+            failure_rate=failure_rate)
         edges = np.array(upper_triangular_to_edgelist_fastest(edges))
         gnk, edges, weights, pts, const = girg_cube_coupling(gnk, edges, weights, pts, const, alpha, PointsCube, W=np.sum(weights))
         return gnk, edges, weights, pts, const
@@ -424,7 +464,7 @@ def generate_GIRG_nk(n, d, tau, alpha,
 
     # note / np.sqrt(np.sum(weights)), s.t. w_u w_v -> (w_u / sqrt(W)) (w_v / sqrt(W)) = w_u w_v / W
     weight_normaliser = np.sqrt(np.sum(weights)) if weights_sum is None else np.sqrt(weights_sum)
-    adj_mat = generateEdges(weights / weight_normaliser, pts, alpha, const=const_in, e=e)
+    adj_mat = generateEdges(weights / weight_normaliser, pts, alpha, const=const_in, failure_rate=failure_rate)
     # adj_mat = generateEdges(scaled_weights, pts, alpha, const=1.0)
 
     # g = nk.nxadapter.nx2nk(nx.from_numpy_array(edges))

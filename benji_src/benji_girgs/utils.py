@@ -531,6 +531,8 @@ def get_diffmap(g, Iweighting=0.5,  sparse_evals=10, **kwargs):
     M_tilde = scipy.sparse.diags(np.array(1 / M_tilde.sum(axis=-1)).squeeze()) @ M_tilde
     M_tilde = (1 - Iweighting) * M_tilde + Iweighting * np.eye(M_tilde.shape[0])
     a, B = scipy.sparse.linalg.eigs(M_tilde, k=sparse_evals, which="LR")
+    # I think we should take absolute values instead?
+    # Although it does seem like everything is real anyway. TODO why?
     a, B = np.real(a), np.real(B)
 
     idx = np.argsort(a)[::-1]
@@ -546,6 +548,8 @@ def get_diffmap(g, Iweighting=0.5,  sparse_evals=10, **kwargs):
 # This function is quite good at fixing diffmap points to be more square like.
 # There is sometimes an issue whereby e.g. in the 2D case, fixing the 2nd dim,
 # we get an X.
+# I generally think it should only be used on cuboid GIRGs, since if the diffmap
+# isn't at heart somewhat cuboid, it's really shifty
 def cubify_dim(pts, k=1, perc_near=0.05, quantile=None):
     n = pts.shape[0]
     # only looks at dimensions 0:k

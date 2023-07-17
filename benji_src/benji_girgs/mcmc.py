@@ -19,11 +19,13 @@ import os
 
 class MCMC_girg():
     def __init__(self, g: nk.Graph, weights: np.ndarray, alpha: float, const: float, pts: points.PointsCube,
-                 pool=False, graph_name=None):
+                 pool=False, graph_name=None, failure_prob=0.0, cl_mixin_prob=0.0):
         """
         Does a 1D MCMC fit for the cube GIRG model
         weights should be the degree sequence
         alpha, const should have already been estimated from GIRG fitting using these weights
+
+        failure_prob: e.g. if 0.0 then can ignore, but 0.1 means we post multiply probabilities by 0.9
         """
         self.n = g.numberOfNodes()
         self.d = pts.shape[1]
@@ -65,46 +67,47 @@ class MCMC_girg():
         # self.p_uv = generation.get_probs(weights / np.sqrt(weights.sum()), self.pts, alpha, self.const_in)
         # self.u_lls = []
 
+        self.failure_prob = failure_prob
 
-        print('calibrating const')
-        for _ in range(7):
-            self.ll, self.expected_num_edges = self.calculate_ll()
-            print(f'const: {self.const}, expected_num_edges: {self.expected_num_edges}')
-            self.calibrate_const()
-
-        self.ll_steps = [0]
-        self.lls = [self.ll]
-        self.num_acceptances = 0
-        self.num_steps = 0
 
 
         gnx = nk.nxadapter.nk2nx(g)
         self.A = nx.adjacency_matrix(gnx).todense()
 
+        self.cl_mixin_prob=cl_mixin_prob
+        if self.cl_mixin_prob > 0.0:
+            # weights = utils.graph_degrees_to_weights(g)
+            # c, probs_cl = generation.chung_lu_fit_c(g, weights)
+            # self.probs_cl = probs_cl
+            #
+            # import feature_extractor
+            #
+            # fe = feature_extractor.FeatureExtractor([])
+            # g_cl = fe.fit_chung_lu(g)
+            # gnx = nk.nxadapter.n
+            # k2nx(g_cl)
+            # A_cl = nx.linalg.adjacency_matrix(gnx).todense()ß
+
+            self.chung_lu_ll, self.er_ll, self.A_cl, self.probs_cl = generation.chung_lu_get_stuff(g)
+
+            self.out_cl, self.percent_edges_captured_cl, self.percent_fake_edges_wrong_cl = CM(self.A, self.A_cl)
+        else:
+            self.probs_cl = None
+
+        # print('calibrating const')
+        for _ in range(7):
+            self.ll, self.expected_num_edges = self.calculate_ll(mixin_probs=self.probs_cl, mixin_chance=self.cl_mixin_prob)
+            # print(f'const: {self.const}, expected_num_edges: {self.expected_num_edges}')
+            self.calibrate_const()
+
         g_out, A_out, out, percent_edges_captured, percent_fake_edges_wrong = self.get_CM(self.A)
         self.percent_edges_captureds = [(percent_edges_captured, 0)]
         self.outs = [(out, 0)]
 
-        # if pool:
-        #     self.pts_old = self.pts.copy()
-        #     self.pts = multiprocessing.RawArray(ctypes.c_double, self.pts.flatten())
-
-        # if pool:
-        #     self.pool = multiprocessing.Pool(pool)
-        #     self.shared_pts = multiprocessing.RawArray(ctypes.c_double, int(np.prod(self.pts.shape)))
-        #     self.pts_old = self.pts.copy()
-        #     self.pts = np.ndarray(self.pts.shape, dtype=np.float64, buffer=self.shared_pts)
-        #     np.copyto(self.pts, self.pts_old)
-        #
-        #     self.ll_steps = multiprocessing.Queue()
-        #     self.lls = multiprocessing.Queue()
-        #     self.ll = multiprocessing.RawValue(ctypes.c_double, self.ll)
-        #     self.lls.put(self.ll)
-        #     self.ll_steps.put(0)
-        #     self.num_acceptances = multiprocessing.RawValue(ctypes.c_int, self.num_acceptances)
-        #
-        # else:
-        #     self.pool = None
+        self.ll_steps = [0]
+        self.lls = [self.ll]
+        self.num_acceptances = 0
+        self.num_steps = 0
 
     def calibrate_const(self):
         """Makes self.const, self.const_in smaller or bigger to match the desired number of edges
@@ -121,7 +124,7 @@ class MCMC_girg():
         ratio = self.expected_num_edges / self.g.numberOfEdges()
         self.const = self.const/ratio
         self.const_in = generation.const_conversion(self.const, self.alpha, d=self.d, true_volume=True)
-    def calculate_ll(self):
+    def calculate_ll(self, mixin_probs=None, mixin_chance=0.0):
         """NB our iterative updating of self.ll is rather approximate, so would need to be
         recalculated from scratch periodically if we wanted to be more accurate"""
         # This is going to be double the actual LL as we double count edges
@@ -130,6 +133,10 @@ class MCMC_girg():
         for u_index in range(self.n):
             eps = 1e-7
             p_u_to_vs = generation.get_probs_u(self.weights, self.pts, self.alpha, self.const_in, u_index)
+            p_u_to_vs *= (1 - self.failure_prob)
+            # E.g. you can mix in the ChungLu distribution to get a better LL...
+            if mixin_chance > 0:
+                p_u_to_vs = p_u_to_vs * (1 - mixin_chance) + mixin_probs[u_index] * mixin_chance
             expected_num_edges += p_u_to_vs.sum()
             p_u_to_vs = np.clip(p_u_to_vs, eps, 1 - eps)
             u_ll = self.p_u_to_vs_to_ll(self.g, u_index, p_u_to_vs)
@@ -145,7 +152,7 @@ class MCMC_girg():
         mask = np.ones(n, dtype=bool)
         for nhb in g.iterNeighbors(u_index):
             mask[nhb] = False
-            out += np.log(p_u_to_vs[nhb])
+        out += np.log(p_u_to_vs[~mask]).sum()
         mask[u_index] = False
 
         out += np.log(1 - p_u_to_vs[mask]).sum()
@@ -167,9 +174,10 @@ class MCMC_girg():
         self.ll += 2 * (u_ll_new - u_ll_old)
 
     @staticmethod
-    def acceptance_prob_static(g, weights, alpha, const_in, pts, u_index, x_u2, prior_x_u=None):
+    def acceptance_prob_static(g, weights, alpha, const_in, pts, u_index, x_u2, prior_x_u=None, failure_prob=0.0):
         eps = 1e-7
         p_u_to_vs = generation.get_probs_u(weights, pts, alpha, const_in, u_index)
+        p_u_to_vs *= (1 - failure_prob)
         p_u_to_vs = np.clip(p_u_to_vs, eps, 1 - eps)
 
         x_u = pts[u_index].copy()
@@ -189,56 +197,15 @@ class MCMC_girg():
         acceptance_prob = min(1, Q_ratio)
         return acceptance_prob, u_ll_old, u_ll_new, p_u_to_vs, p_u_to_vs2
 
-    # @staticmethod
-    # def acceptance_probs_static(g: nk.Graph, weights: np.ndarray, alpha: float,
-    #                             const_in: float, pts: np.ndarray, u_indices: np.ndarray, x_u2: np.ndarray):
-    #     """
-    #
-    #     Args:
-    #         g:
-    #         weights:
-    #         alpha:
-    #         const_in:
-    #         pts:  (n, d)
-    #         u_index: of size k
-    #         x_u2: of size (k, d)
-    #
-    #     Returns:
-    #
-    #     """
-    #     eps = 1e-7
-    #     p_u_to_vs = generation.get_probs_u(weights, pts, alpha, const_in, u_index)
-    #     p_u_to_vs = np.clip(p_u_to_vs, eps, 1 - eps)
-    #
-    #     x_u = pts[u_index].copy()
-    #     pts[u_index] = x_u2
-    #     p_u_to_vs2 = generation.get_probs_u(weights, pts, alpha, const_in, u_index)
-    #     pts[u_index] = x_u
-    #     p_u_to_vs2 = np.clip(p_u_to_vs2, eps, 1 - eps)
-    #
-    #     u_ll_old = MCMC_girg.p_u_to_vs_to_ll(g, u_index, p_u_to_vs)
-    #     u_ll_new = MCMC_girg.p_u_to_vs_to_ll(g, u_index, p_u_to_vs2)
-    #
-    #     Q_ratio = np.exp(u_ll_new - u_ll_old)
-    #     acceptance_prob = min(1, Q_ratio)
-    #     return acceptance_prob, u_ll_old, u_ll_new, p_u_to_vs, p_u_to_vs2
 
     def acceptance_prob(self, u_index, x_u2):
-        return self.acceptance_prob_static(self.g, self.weights, self.alpha, self.const_in, self.pts, u_index, x_u2)
+        return self.acceptance_prob_static(self.g, self.weights, self.alpha, self.const_in, self.pts, u_index, x_u2, self.failure_prob)
 
     def step0(self):
         u_index = np.random.randint(self.n)
         x_u2 = np.random.uniform(size=self.d)
         acceptance_prob, u_ll_old, u_ll_new, p_u_to_vs_old, p_u_to_vs_new = self.acceptance_prob(u_index, x_u2)
         return acceptance_prob, u_index, x_u2, u_ll_old, u_ll_new, p_u_to_vs_old, p_u_to_vs_new
-
-    # def step0_pool(self):
-    #     global pts
-    #     my_pts = self.pts_type(np.frombuffer(pts).reshape(self.n, self.d))
-    #     u_index = np.random.randint(self.n)
-    #     x_u2 = np.random.uniform(size=self.d)
-    #     acceptance_prob, u_ll_old, u_ll_new, p_u_to_vs_old, p_u_to_vs_new = self.acceptance_prob(u_index, x_u2)
-    #     return acceptance_prob, u_index, x_u2, u_ll_old, u_ll_new, p_u_to_vs_old, p_u_to_vs_new
 
     def step1(self):
         acceptance_prob, u_index, x_u2, u_ll_old, u_ll_new, p_u_to_vs_old, p_u_to_vs_new = self.step0()
@@ -292,11 +259,6 @@ class MCMC_girg():
                 self.ll_steps.append(self.num_steps)
 
 
-    # def __getstate__(self):
-    #     self_dict = self.__dict__.copy()
-    #     del self_dict['pts']
-    #     return self_dict
-
     def run(self, n_steps, plot_every=None, pool_size=None, jobs_per_worker=5):
         start_steps = self.num_steps
         with tqdm(total=n_steps) as pbar:
@@ -312,39 +274,6 @@ class MCMC_girg():
 
                 pbar.update(self.num_steps - start_steps - pbar.n)
 
-    # another attempt with pool not thread pool. Pickling overhead! But what is pickled? Hopefully not too much.
-    # def run_pool(self, n_steps, pool_size=5, verbose=False):
-    #     with tqdm(total=n_steps) as pbar:
-    #         while self.num_steps < n_steps:
-    #             jobs_per_worker = 10
-    #             seeds = self.num_steps*(jobs_per_worker*pool_size) + np.arange(jobs_per_worker*pool_size)
-    #             with multiprocessing.Pool(processes=pool_size, initializer=mcmc_girg_init_worker, initargs=(self.pts, self.pts.shape, self.weights, self.g)) as p:
-    #                 results = p.imap_unordered(mcmc_girg_pool_step, [(seed, self.alpha, self.const_in) for seed in seeds], chunksize=jobs_per_worker)
-    #                 for accepted, acceptance_prob, delta_ll, u_index, u_index, x_u2 in results:
-    #                     if verbose:
-    #                         print(f'acceptance_prob: {acceptance_prob}')
-    #                         print(u_index)
-    #                         print(x_u2)
-    #                         print(acceptance_prob)
-    #                         print(f'accepted: {accepted}')
-    #                     if accepted:
-    #                         break
-    #                     else:
-    #                         self.num_steps += 1
-    #
-    #                 p.terminate()
-    #                 p.join()
-    #
-    #                 if accepted:
-    #                     self.num_steps += 1
-    #                     self.ll += delta_ll
-    #                     pts = np.frombuffer(self.pts).reshape(self.n, self.d)
-    #                     pts[u_index] = x_u2
-    #                     self.num_acceptances += 1
-    #                     self.lls.append(self.ll)
-    #                     self.ll_steps.append(self.num_steps)
-    #             pbar.update(self.num_steps - pbar.n)
-
 
     # TODO pool size doesn't speed this up enough??
     def run_pool(self, n_steps, pool_size=5, jobs_per_worker=5, plot_every=None, verbose=False,
@@ -356,7 +285,7 @@ class MCMC_girg():
                 seeds = (self.num_steps*(jobs_per_worker*pool_size) + np.arange(jobs_per_worker*pool_size)) % (2**31)
                 outputs = []
                 with multiprocessing.Pool(processes=pool_size, initializer=mcmc_girg_init_worker, initargs=(self.shared_pts, self.pts.shape, self.shared_pts_init, self.weights, self.g)) as p:
-                    results = p.imap_unordered(mcmc_girg_pool_step, [(seed, self.alpha, self.const_in, sigma, p_normal) for seed in seeds], chunksize=jobs_per_worker)
+                    results = p.imap_unordered(mcmc_girg_pool_step, [(seed, self.alpha, self.const_in, sigma, p_normal, self.failure_prob) for seed in seeds], chunksize=jobs_per_worker)
                     for accepted, acceptance_prob, delta_ll, u_index, u_index, x_u2 in results:
                         if verbose:
                             print(f'acceptance_prob: {acceptance_prob}')
@@ -399,9 +328,9 @@ class MCMC_girg():
 
         wacky_lls = np.array(self.lls[last_ll_step:])
         last_good_ll = wacky_lls[0]
-        self.ll, self.expected_num_edges = self.calculate_ll()
-        self.calibrate_const()
         bad_current_ll = self.ll
+        self.ll, self.expected_num_edges = self.calculate_ll(mixin_probs=self.probs_cl, mixin_chance=self.cl_mixin_prob)
+        self.calibrate_const()
         better_lls = last_good_ll + ((self.ll - last_good_ll) / (bad_current_ll - last_good_ll)) * (
                     wacky_lls - last_good_ll)
         self.lls[last_ll_step:] = list(better_lls)
@@ -530,7 +459,10 @@ class MCMC_girg():
             self.n, self.d, tau, self.alpha, weights=self.weights_original,
             const=self.const,
             pts=self.pts,
-            points_type=points.PointsCube)
+            points_type=points.PointsCube,
+            failure_rate=self.failure_prob)
+
+
 
         gnx = nk.nxadapter.nk2nx(g)
         A = nx.linalg.adjacency_matrix(gnx).todense()
@@ -568,7 +500,7 @@ def mcmc_girg_init_worker(pts, pts_shape, pts_init, weights, g):
 
 
 def mcmc_girg_pool_step(stuff):
-    seed, alpha, const_in, sigma, p_normal = stuff
+    seed, alpha, const_in, sigma, p_normal, failure_prob = stuff
     np.random.seed(seed=seed)
     # mp_var_dict should be passed in as a setup function
     n, d = mp_var_dict['pts_shape']
@@ -612,7 +544,7 @@ def mcmc_girg_pool_step(stuff):
     # NB! x_u_init is actually the current x_u, since pts_init == None
     x_u2 = MCMC_girg.proposal(1, d, sigma=sigma, x_u=x_u_init, p_normal=p_normal).squeeze()
     acceptance_prob, u_ll_old, u_ll_new, p_u_to_vs_old, p_u_to_vs_new = MCMC_girg.acceptance_prob_static(g, weights, alpha, const_in, pts,
-                                                                                                  u_index, x_u2, prior_x_u)
+                                                                                                  u_index, x_u2, prior_x_u, failure_prob)
 
     accepted = np.random.rand() < acceptance_prob
     delta_ll = 2 * (u_ll_new - u_ll_old)
@@ -646,7 +578,7 @@ def g_diffmap_initialised_mcmc(g, alpha, const, pts_d=1, uniformly=True):
 
     return g, A, weights, const, pts_diffmap, pts_init, MC, MC_init
 
-def g_initialised_mcmc(g, alpha, const, pts_d=1, diffmap_init=True, graph_name=None):
+def g_initialised_mcmc(g, alpha, const, pts_d=1, diffmap_init=True, graph_name=None, failure_prob=0.0, cl_mixin_prob=0.0):
     n = g.numberOfNodes()
 
     gnx = nk.nxadapter.nk2nx(g)
@@ -655,14 +587,17 @@ def g_initialised_mcmc(g, alpha, const, pts_d=1, diffmap_init=True, graph_name=N
     weights = np.array(utils.graph_degrees_to_weights(g))
 
     if diffmap_init:
-        w, Phi, Psi, diff_map = utils.get_diffmap(g, Iweighting=0.5, eye_or_ones='eye')
-        pts = np.array([diff_map(i, 10) for i in range(n)])
-        pts = utils.uniformify_pts(pts)
-        pts = points.PointsCube(pts[:, 0:pts_d])
+        # w, Phi, Psi, diff_map = utils.get_diffmap(g, Iweighting=0.5, eye_or_ones='eye')
+        # pts = np.array([diff_map(i, 10) for i in range(n)])
+        # pts = utils.uniformify_pts(pts)
+        # pts = points.PointsCube(pts[:, 0:pts_d])
+        a, B, pts = utils.get_diffmap_and_points(g, process='restrict_uniform_edges', ds=pts_d)
+        pts = points.PointsCube(pts)
     else:
         pts = points.PointsCube(np.random.uniform(size=(n, pts_d)))
 
-    MC = MCMC_girg(g, weights, alpha, const, pts.copy(), pool=True, graph_name=graph_name)
+    MC = MCMC_girg(g, weights, alpha, const, pts.copy(), pool=True, graph_name=graph_name, failure_prob=failure_prob,
+                   cl_mixin_prob=cl_mixin_prob)
 
     return g, A, weights, const, pts, MC
 
@@ -707,7 +642,7 @@ def quick_2dhistplot(g, process='cubify'):
     if process=='uniformify':
         pts_diffmap = utils.uniformify_pts(pts_diffmap)
     elif process == 'cubify':
-        pts_diffmap[:, 1] = cubify_last_k_dim(pts_diffmap, k=1, num_near=50)
+        pts_diffmap[:, 1] = utils.cubify_dim(pts_diffmap, k=1, perc_near=0.05)
         pts_diffmap[:, 0] = pts_diffmap[:, 0].argsort().argsort()/n
     pts_diffmap = points.PointsCube(pts_diffmap)
 
@@ -723,4 +658,7 @@ def quick_2dhistplot(g, process='cubify'):
     plt.figure()
     sns.displot(x=pts_diffmap[:, 0], y=pts_diffmap[:, 1], kind="kde")
     return pts_diffmap
+
+
+
 

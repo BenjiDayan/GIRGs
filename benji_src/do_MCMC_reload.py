@@ -80,6 +80,17 @@ mini_df = df.loc[df.Model == '1d-copyweight-cube-girg'].sort_values('Nodes').loc
 
 pickle_path = '../MCMC_runs/pickles/'
 
+def trim_MC_lls(MC):
+    lls_new = []
+    ll_steps_new = []
+    for i, (ll, ll_steps) in enumerate(zip(MC.lls, MC.ll_steps)):
+        if i % 100 == 0:
+            lls_new.append(ll)
+            ll_steps_new.append(ll_steps)
+
+    MC.lls = lls_new
+    MC.ll_steps = ll_steps_new
+
 import multiprocessing
 if __name__ == '__main__':
     print('running MCMC')

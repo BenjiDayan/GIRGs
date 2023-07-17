@@ -40,16 +40,19 @@ socfb_graphs = df.loc[df.Model == 'real-world'].loc[df.Type == 'socfb'].sort_val
 
 graph_name_group_pairs = socfb_graphs[['Graph', 'Type']].to_numpy()
 graph_dicts = []
-for graph_name, group in graph_name_group_pairs:
+# for graph_name, group in graph_name_group_pairs:
+for fn in os.listdir(data_dir):
+    graph_name = fn.split('.')[0]
     # TODO remove? socfg-nips-ego has avg deg 2.0 which is very small, and for some reason
     #  makes GIRG finding much slower
     #  and idk why but it's no longer in data_dir wtf???
     if graph_name == 'socfb-nips-ego':
         continue
-    fn = glob.glob(data_dir + graph_name + '.*')[0]
-    print(fn)
+    # fn = glob.glob(data_dir + graph_name + '.*')[0]
+    full_path = os.path.join(data_dir, fn)
+    print(full_path)
 
-    graph_dict = {"Group": group, "FullPath": fn, "Name": graph_name}
+    graph_dict = {"Group": 'socfb', "FullPath": full_path, "Name": graph_name}
     graph_dicts.append(graph_dict)
 
 

@@ -5,6 +5,7 @@ sys.path.append('../nemo-eva/src/')
 import numpy as np
 
 import feature_extractor
+
 #
 # from feature_extractor import FeatureExtractor
 
@@ -73,7 +74,7 @@ df.Info = df.Info.apply(lambda temp: {key: eval(var) for key, var in [x.split('=
     })
 df['alpha'] = df.Info.apply(lambda x: x['alpha'] if 'alpha' in x else 1/float(x['t']) if 't' in x else None)
 
-os.environ['DATA_PATH'] = '/cluster/home/bdayan/girgs/MCMC_run8/'
+os.environ['DATA_PATH'] = '/cluster/home/bdayan/girgs/MCMC_run_fp_0p3_cl_0p5_v3/'
 
 mini_df = df.loc[df.Model == '1d-copyweight-cube-girg'].sort_values('Nodes').loc[:,['Graph', 'Model', 'Nodes', 'Info'] ]
 
@@ -84,6 +85,8 @@ if __name__ == '__main__':
     print('running MCMC')
 
     for j, graph_name in enumerate(mini_df.Graph):
+        if not j % 3 == 0:
+            continue
         # if j < 10:
         #     continue
         # if j > 4:
@@ -100,54 +103,64 @@ if __name__ == '__main__':
 
             n = g.numberOfNodes()
     ##################
-            gnx = nk.nxadapter.nk2nx(g)
-            A = nx.linalg.adjacency_matrix(gnx).todense()
-
-            g_degs = [g.degree(i) for i in range(g.numberOfNodes())]
-
-            argsorted = np.argsort(g_degs)[::-1]
-            fe = feature_extractor.FeatureExtractor([])
-
-            cl = fe.fit_chung_lu(g)
-            gnx = nk.nxadapter.nk2nx(cl)
-            A_cl = nx.linalg.adjacency_matrix(gnx).todense()
-            # A_cl = A_cl[:, argsorted][argsorted, :]
-
-            out, p1, p2 = mcmc.CM(A[:, argsorted][argsorted, :], A_cl)
-            print(p1, p2)
-            print(out)
-
-            weights = utils.graph_degrees_to_weights(g)
-            c, probs = generation.chung_lu_fit_c(g, weights)
-            chung_lu_ll = generation.g_probs_to_ll(g, probs)
-            print(f'chunglu LL: {chung_lu_ll}')
-            er_ll = generation.ER_ll(g)
-            print(f'er LL: {er_ll}')
+            # gnx = nk.nxadapter.nk2nx(g)
+            # A = nx.linalg.adjacency_matrix(gnx).todense()
+            #
+            # g_degs = [g.degree(i) for i in range(g.numberOfNodes())]
+            #
+            # argsorted = np.argsort(g_degs)[::-1]
+            # fe = feature_extractor.FeatureExtractor([])
+            #
+            # cl = fe.fit_chung_lu(g)
+            # gnx = nk.nxadapter.nk2nx(cl)
+            # A_cl = nx.linalg.adjacency_matrix(gnx).todense()
+            # # A_cl = A_cl[:, argsorted][argsorted, :]
+            #
+            # out, p1, p2 = mcmc.CM(A[:, argsorted][argsorted, :], A_cl)
+            # print(p1, p2)
+            # print(out)
+            #
+            # weights = utils.graph_degrees_to_weights(g)
+            # c, probs = generation.chung_lu_fit_c(g, weights)
+            # chung_lu_ll = generation.g_probs_to_ll(g, probs)
+            # print(f'chunglu LL: {chung_lu_ll}')
+            # er_ll = generation.ER_ll(g)
+            # print(f'er LL: {er_ll}')
 
     ######################
 
-            # for i in range(len(temp)):
-            #     alpha, const = temp.iloc[i].Info['alpha'], temp.iloc[i].Info['const']
-            #
-            #
-            #     g, A, weights, const, pts, MC = mcmc.g_initialised_mcmc(g, alpha=alpha, const=const, pts_d=i+1,
-            #                                                             diffmap_init=True, graph_name=graph_name + f'-{i+1}d')
-            #
-            #     g_dm, A_dm = MC.MC_to_g_A()
-            #     print(MC.outs[0])
-            #     print(MC.percent_edges_captureds[0])
-            #
-            #     fig, ax1 = plt.subplots()
-            #     ax2 = ax1.twinx()
-            #
-            #     # e.g. Caltech 762 with d=1 is about 300K iterations
-            #     iterations = int(n * 450 * (i+1))
-            #     MC.run_pool(iterations, pool_size=14, jobs_per_worker=100, plot_every=20000, use_tqdm=False)
-            #     MC.pickle()
+            for i in range(len(temp)):
+                if i == 2:  # only do d=1,2
+                    continue
+
+                alpha, const = temp.iloc[i].Info['alpha'], temp.iloc[i].Info['const']
+
+
+                g, A, weights, const, pts, MC = mcmc.g_initialised_mcmc(g, alpha=alpha, const=const, pts_d=i+1,
+                                                                        diffmap_init=True, graph_name=graph_name + f'-{i+1}d',
+                                                                        failure_prob=0.3, cl_mixin_prob=0.5)
+
+                g_dm, A_dm = MC.MC_to_g_A()
+                print(MC.outs[0])
+                print(MC.percent_edges_captureds[0])
+
+                fig, ax1 = plt.subplots()
+                ax2 = ax1.twinx()
+
+                # e.g. Caltech 762 with d=1 is about 300K iterations
+                iterations = int(n**1.2 * 100 * (i+1))
+                MC.run_pool(iterations, pool_size=10, jobs_per_worker=100, plot_every=10000, use_tqdm=False, save_plot=True)
+
+                # save space in pickling :((
+                MC.g = None
+                MC.A = None
+                MC.probs_cl = None
+
+                MC.pickle()
 
         except Exception as e:
-            print(Exception)
+            print(e)
             continue
 
 
-# sbatch --time=24:00:00 --ntasks=1 --cpus-per-task=15 --mem-per-cpu=4G --wrap="python do_MCMC.py"
+# sbatch --time=24:00:00 --ntasks=1 --cpus-per-task=11 --mem-per-cpu=4G --wrap="python do_MCMC.py"
