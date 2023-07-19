@@ -395,6 +395,87 @@ TODO
     \item 
 \end{enumerate}
 
+
+% \begin{sidewaystable}
+%     \centering
+%     \caption{Feature Set Performance}
+%     \begin{tabular}{|l|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
+%             \hline
+%             Features & 1co & 2co & 5co & CL & 1-23 & 1-234 & 1min & 5min & 1cu & 2cu & 3cu & 1 & 2 & 7 & BA & ER & hyper \\ \hline
+%             n, m, betw & 81 & 84 & 95 & 95 & 99 & 99 & 99 & 100 & 99 & 100 & 100 & 99 & 99 & 99 & 100 & 100 & 99 \\ \hline
+%             n, m, core & 93 & 91 & 91 & 85 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 \\ \hline
+%             n, m, close & 92 & 86 & 86 & 91 & 99 & 99 & 99 & 97 & 99 & 98 & 95 & 98 & 98 & 98 & 99 & 100 & 97 \\ \hline
+%             n, m, c & 95 & 92 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 \\ \hline
+%             n, m, deg & 87 & 77 & 66 & 55 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 \\ \hline
+%             n, m, Katz & 76 & 75 & 62 & 54 & 94 & 94 & 94 & 91 & 94 & 97 & 99 & 94 & 93 & 94 & 100 & 99 & 94 \\ \hline
+%             n, m, PR & 82 & 76 & 77 & 77 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 \\ \hline
+%             n, m, comm & 97 & 95 & 95 & 91 & 98 & 98 & 98 & 99 & 93 & 95 & 93 & 95 & 96 & 89 & 95 & 90 & 99 \\ \hline
+%             n, m, kcore & 94 & 92 & 88 & 84 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 \\ \hline
+%             n, m, diam & 97 & 98 & 97 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 & 100 \\ \hline
+%             n, m, e-diam & 78 & 76 & 78 & 89 & 92 & 83 & 83 & 99 & 82 & 77 & 77 & 85 & 83 & 88 & 100 & 99 & 83 \\ \hline 
+% \end{tabular}
+% \end{sidewaystable}
+
+\begin{sidewaysfigure}
+    \centering
+    % \begin{subfigure}
+    \includegraphics[width=\textwidth]{./figures/Blasius_framework_table.png}
+    \caption{\cite{blasius2018towards} GGM comparison framework on Facebook graphs, extended to different GIRG models. Classification accuraciese by SVM use various feature sets. We chose to focus on feature sets involving one core feature (mean, quartile and standard deviation statistics) on top of just number of nodes and edges. If just one of mean/median is used, accuracies are often lower, sometimes even in $50\%-70\%$. $50\%$ is the best possible validation of a GGM as indistinguishable from real data, and is only achieved for feature set $n, m, LCC \;\text{mean}$ (by GIRGs and not the other none geometric GGMs). Some models are missing from the table e.g. 3d-6d GIRGs as their results follow a trend from low to high dimension.
+    %
+    The model type }
+    % \end{subfigure}
+    \vspace{1em}
+    \centering
+    % \begin{subfigure}
+    \begin{tabular}{|c|c||c|c|}
+        \hline
+        1-co & 1d copy weight cube GIRG 
+        & betw & betweenness centrality
+        \\
+        1-23 & $1 \lor (2 \land 3)$ mixed min/max GIRG
+        & k-core & node k-core number
+        \\
+        2-min & $1 \lor 2$ 2d min GIRG
+        & close & closeness centrality
+        \\
+        3-cu & 3d cube GIRG
+        & LCC & node local clustering coefficient
+        \\
+        7d & 7d GIRG
+        & deg & node degree
+        \\
+        \hline
+        CL & ChungLu
+        & Katz & node Katz centrality
+        \\
+        BA & Barabasi-Albert
+        & PR & node PageRank
+        \\
+        ER & Erdos-Renyi
+        & comms & community sizes
+        \\
+        hyper & Hyperbolic
+        & k-cores & k-core sizes
+        \\
+        && diam & graph diameter\\
+        && eff-diam & graph effective diameter\\
+        \hline
+    \end{tabular}
+    \caption{Graph Generative Model abbreviations; feature name abbreviations}
+% \end{subfigure}
+\end{sidewaysfigure}
+
+% \begin{sidewaystable}
+%     \centering
+%     \begin{tabular}{|c|c|}
+%         \hline
+%         1-co & 1d copy weight GIRG \\
+%         1-23 & $1 \lor (2 \land 3)$ mixed min/max GIRG \\
+%         2-min & $1 \lor 2$ 2d min GIRG \\
+%     \end{tabular}
+% \end{sidewaystable}
+
+
 % Translating the two equivalent volumetric and distance based formulations of the Toroidal GIRG to the Cube actually gives two different but both potentially sensible definitions. 
 
 % We'll start with the Toroidal Max GIRG where the distance function is $r^\T(x_u, x_v) = \norm{x_u - x_v}_{\infty, \T}$, the derived volume function in the toroidal setting is $Vol^\T(r^\T_{uv}) = (2r^\T_{uv})^d$, and the toroidal edge probability is $p_{uv}(r^\T) = \min \left \{1, \left ( \frac{w_u w_v}{n Vol^\T(r_{uv})} \right )^\alpha \right \} = \min \left \{1, \left ( \frac{w_u w_v}{n (2r^\T_{uv})^d} \right )^\alpha \right \}$. 

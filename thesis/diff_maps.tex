@@ -51,9 +51,16 @@ We can write it as $\tilde{M} = D_1 \Phi \Lambda \Psi^T D^{-\gamma}$. This does 
 
 Instead we hope that $\tilde{M}$ is diagonalisable as $\tilde{M} = BAB^{-1}$ for diagonal $A$, and use the corresponding diffusion map representation $i \mapsto (\vec{b}_2(i) a_2^t,... \vec{b}_{m+1}(i) a_{m+1}^t)$.
 
+Actually no hope for diagonalisability is needed. This process can be viewed as modifying the adjacency matrix $W_{ij}$ to have not all $1$ weights, instead having weights e.g. $d_i^{-\gamma}d_j^{-\gamma}$. This is done all at the start, so then $S = D^{-1/2} W D^{-1/2}$ is well defined using $D_ii = \sum_{j \neq i} W_{ij}$, and $M = D^{-1} W$ is still a valid probability transition matrix. Indeed it involves $M_{ij} = \frac{W_{ij}}{D_{ii}}$ which comes out with the same $d_j^{-\gamma}$ weighting as previously hoped for.
 
+Another interpretation of this is following:
+heat kernel?? wtf. See Belkin Nyiogi Laplacian Eigenmaps for Dimensionality Reduction and Data Representation
+
+The logic roughly goes: Belkin Nyiogi suggest converting a geometric distribution into a graph via $W_{ij} = e^{-||x_i - x_j||^2}{T}$ for some parameter $T > 0$. We're given a straight graph, but using the GIRG assumption, we know that $u \sim v$ means roughly that $r_{uv} \approxeq \left ( \frac{w_u w_v}{n} \right )^{1/d}$. I.e. we can plug this guess in to give smaller weights to edges between nodes with high degree, analgously to the above approach of setting $W_{ij} = d_i^{-\gamma} d_j^{-\gamma}$.
+
+The way we benchmark all these approaches is by generating a graph $G$ with a GIRG (potentially a slightly wonky one), and looking at the correlation coefficient of pts and pts dm. We see that both heat kernel method and $D^{-\gamma}$ method outperform baseline, and $D^{-\gamma}$ method outperforms heat kernel method, using about $\gamma=0.9$. welp.
 % % 
-% The m-truncated diffusion map representation becomes the new representation of nodes in the graph. The diffusion map is then a function $\R^n \to \R^m$. The first coordinate $\lambda_1$ is always $1$, corresponding to the stationary distribution of the random walk which all node diffusion maps converge to. This is useless for differentiating nodes and is hence dropped.
+% The m-truncated diffusion map representation becomes the new r epresentation of nodes in the graph. The diffusion map is then a function $\R^n \to \R^m$. The first coordinate $\lambda_1$ is always $1$, corresponding to the stationary distribution of the random walk which all node diffusion maps converge to. This is useless for differentiating nodes and is hence dropped.
 
 % Notably the transition matrix satisfies $M1 = 1$ since $\sum_j \frac{w_{ij}}{\deg(i)} = 1$, and it can be shown that it has eigenvalues $\lambda_1=1 \geq \lambda_2 \geq \lambda_3 \geq ...$.  
 
