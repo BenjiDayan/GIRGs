@@ -495,7 +495,7 @@ def get_diffmap_old(g, Iweighting=0.5, sparse_evals=10, **kwargs):
 
     return w, Phi, Psi, diff_map
 
-def get_diffmap(g, Iweighting=0.5,  sparse_evals=10, **kwargs):
+def get_diffmap(g, Iweighting=0.5,  sparse_evals=10, gamma=0.9, heat_kernel=0, **kwargs):
     """
     Provided g is connected, find the diffusion map of g.
     w are the eigenvalues, decreasing from 1.0, lambda_2, lambda_3, ...
@@ -507,6 +507,9 @@ def get_diffmap(g, Iweighting=0.5,  sparse_evals=10, **kwargs):
     sparse_evals: We do things sparsely, and the sparse eigenvalue finder can actually
     restrict to the top k eigenvalues, so we will use this. As long as you only e.g. care about
     max the top 3 dimensions, happily set this to 10 I guess.
+
+    heat_kernel?? wtf. See Belkin Nyiogi Laplacian Eigenmaps for Dimensionality Reduction and Data
+    Representation
     """
     if nk.components.ConnectedComponents(g).run().numberOfComponents() > 1:
         raise Exception("Graph is not connected")
@@ -517,7 +520,23 @@ def get_diffmap(g, Iweighting=0.5,  sparse_evals=10, **kwargs):
     # A = nx.linalg.adjacency_matrix(gnx).todense()
     A = nx.linalg.adjacency_matrix(gnx)
 
-    D = np.array([x[1] for x in (gnx.degree)])
+    if heat_kernel:
+        d = heat_kernel  # integer??
+        A = A.astype(np.float32)
+        # if u~v then E[r_uv] is about such that p_uv=1, i.e. r_uv = (w_u w_v/n)^(1/d)
+        # Then heat kernel thing says that we want W_ij = exp(-r_ij^2 / T) for some param T
+        dd = nk.centrality.DegreeCentrality(g).run().scores()
+        n = g.numberOfNodes()
+        T = 1.0 # ??
+        for i, j in g.iterEdges():
+            r_ij = (dd[i] * dd[j] / n)**(1/d)
+            A[i, j] = np.exp(-r_ij**2 / T)
+            A[j, i] = A[i, j]
+
+        D = A.sum(axis=1)
+
+    else:
+        D = np.array([x[1] for x in (gnx.degree)])
     D_h = D**(0.5)
     D_hi = D**(-0.5)
 
@@ -526,7 +545,6 @@ def get_diffmap(g, Iweighting=0.5,  sparse_evals=10, **kwargs):
 
     # Empirically this gamma seems to work well.
     # It discourages taking edges to popular nhbs.
-    gamma = 0.9
     M_tilde = scipy.sparse.diags(1 / D) @ A @ scipy.sparse.diags(D ** (-gamma))
     M_tilde = scipy.sparse.diags(np.array(1 / M_tilde.sum(axis=-1)).squeeze()) @ M_tilde
     M_tilde = (1 - Iweighting) * M_tilde + Iweighting * np.eye(M_tilde.shape[0])

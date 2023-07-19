@@ -132,7 +132,8 @@ def run_experiment_meta(original_graph_func, original_graph_kwargs, fit_girg_fun
     elif plot_type == 'boxplot':
         sns.boxplot(data=data)
     else:
-        raise Exception('plot_type not recognized - swarmplot or boxplot?')
+        pass
+        # raise Exception('plot_type not recognized - swarmplot or boxplot?')
     plt.yscale('log')
     plt.ylabel('1 - RW kernel with original graph')
     plt.xlabel('Graph Generating Model')
@@ -145,13 +146,15 @@ def run_experiment_meta(original_graph_func, original_graph_kwargs, fit_girg_fun
 
 
 def run_experiment(name='socfb-Reed98', n_per=4, cl_mixin_prob=0.0, kernel=None, node_labelling_func=None,
-                   plot_type='swarmplot'):
-    gd = list(filter(lambda x: x['Name'] == name, do_feature_extract.graph_dicts))[0]
-    in_path = gd['FullPath']
+                   plot_type='swarmplot',
+                   g=None):
+    if g is None:
+        gd = list(filter(lambda x: x['Name'] == name, do_feature_extract.graph_dicts))[0]
+        in_path = gd['FullPath']
 
-    g = nk.readGraph(in_path, nk.Format.EdgeListSpaceOne)
-    g = utils.get_largest_component(g)
-    # nk.overview(g)
+        g = nk.readGraph(in_path, nk.Format.EdgeListSpaceOne)
+        g = utils.get_largest_component(g)
+        # nk.overview(g)
 
     g_gk = g_to_grakel(g, node_labelling_func=node_labelling_func)
 
@@ -192,36 +195,63 @@ def run_experiment(name='socfb-Reed98', n_per=4, cl_mixin_prob=0.0, kernel=None,
     elif plot_type == 'boxplot':
         sns.boxplot(data=data)
     else:
-        raise Exception('plot_type not recognized - swarmplot or boxplot?')
-    plt.yscale('log')
+        pass
+        # raise Exception('plot_type not recognized - swarmplot or boxplot?')
 
     return data
 
 
-def g_to_grakel(g_nk, node_labelling_func=None):
+def g_to_grakel(g_nk, node_labelling_func=None, edge_labelling_func=None):
     gnx = nk.nxadapter.nk2nx(g_nk)
     A = nx.adjacency_matrix(gnx).todense()
+
     if node_labelling_func is None:
-        g_gk = grakel.Graph(A)
+        node_labels = None
     else:
         labels = node_labelling_func(g_nk)
-        # g_gk = grakel.Graph(A, node_labels={v: node_labelling_func(g_nk, v) for v in g_nk.iterNodes()})
-        g_gk = grakel.Graph(A, node_labels={v: labels[v] for v in g_nk.iterNodes()})
+        node_labels = {v: labels[v] for v in g_nk.iterNodes()}
+        g_gk = grakel.Graph(A)
+
+    if edge_labelling_func is None:
+        edge_labels = None
+    else:
+        edge_labels = edge_labelling_func(g_nk)
+        edge_labels2 = {}
+        for (u, v), val in edge_labels.items():
+            edge_labels2[(u, v)] = val
+            edge_labels2[(v, u)] = val
+    g_gk = grakel.Graph(A, node_labels=node_labels, edge_labels=edge_labels)
     return g_gk
 
 
 
-def graph_to_labels(g, num_colors=5):
-    ddarr = np.array(nk.centrality.DegreeCentrality(g).run().scores())
+def graph_to_labels(g, metric='degrees', num_colors=5, power=1.0):
+    if metric == 'degrees':
+        arr = np.array(nk.centrality.DegreeCentrality(g).run().scores())
+    elif metric== 'betweenness':
+        arr = nk.centrality.EstimateBetweenness(g, 1000).run().scores()
+
     if num_colors is None:
-        return ddarr
-    bin_edges = histedges_equalN(ddarr, num_colors)
-    colors = np.digitize(ddarr, bin_edges)
+        return arr
+    # power = 1.0 is equivalent to histedges_equalN
+    bin_edges = histedges_weird(arr, num_colors, power=power)
+    colors = np.digitize(arr, bin_edges)
     return colors
+
+# What if we want some weird bucket system where buckets don't have equal numbers of nodes?
+# More like the number of nodes is prop to 1/median size of bucket
+# uh sounds kinda complex
+def histedges_weird(x, nbin, power=0.5):
+    npt = len(x)
+    return np.interp(npt * np.linspace(0, 1, nbin + 1)**power,
+                     np.arange(npt),
+                     np.sort(x))
+
 
 def graph_to_labels_random(g, num_colors=5):
     colors = np.random.randint(0, num_colors, g.numberOfNodes())
     return colors
+
 
 
 def histedges_equalN(x, nbin):
@@ -235,6 +265,7 @@ def multiple_girg_comparisons(d=1, n=100, tau=2.5, alpha=1.5, desiredAvgDegree=5
                               d_max_girgs=3,
                               points_type=points.PointsTorus2, c_implementation=True,
                               kernel=None, n_per=4, node_labelling_func=None,
+                              edge_labelling_func=None,
                               plot_type='swarmplot'):
     """
     This is a cheapish experiment: we don't fit LCC. We use torus
@@ -265,7 +296,7 @@ def multiple_girg_comparisons(d=1, n=100, tau=2.5, alpha=1.5, desiredAvgDegree=5
     nk.overview(g)
     # n = g.numberOfNodes()
 
-    g_gk = g_to_grakel(g, node_labelling_func=node_labelling_func)
+    g_gk = g_to_grakel(g, node_labelling_func=node_labelling_func, edge_labelling_func=edge_labelling_func)
 
 
     if kernel is None:
@@ -280,9 +311,9 @@ def multiple_girg_comparisons(d=1, n=100, tau=2.5, alpha=1.5, desiredAvgDegree=5
     print('cl')
     for i in range(n_per):
         g1 = generation.fit_chung_lu(g, seed=i)
-        g_gk1 = g_to_grakel(g1, node_labelling_func=node_labelling_func)
+        g_gk1 = g_to_grakel(g1, node_labelling_func=node_labelling_func, edge_labelling_func=edge_labelling_func)
         out = kernel.transform([g_gk1])[0, 0]
-        print(out)
+        print(1-out)
         outs[-1].append(out)
 
 
@@ -291,9 +322,9 @@ def multiple_girg_comparisons(d=1, n=100, tau=2.5, alpha=1.5, desiredAvgDegree=5
         outs.append([])
         for i in range(n_per):
             g1 = gen_girg(d1)
-            g_gk1 = g_to_grakel(g1, node_labelling_func=node_labelling_func)
+            g_gk1 = g_to_grakel(g1, node_labelling_func=node_labelling_func, edge_labelling_func=edge_labelling_func)
             out = kernel.transform([g_gk1])[0, 0]
-            print(out)
+            print(1-out)
             outs[-1].append(out)
 
 
