@@ -9,11 +9,11 @@ import matplotlib.pyplot as plt
 
 
 if __name__ == '__main__':
-    folder = 'gentorus_similarity_plots_WLK_n_per_9'
+    folder = 'gentorus_similarity_plots_WLK_n_per_13'
     os.makedirs(folder, exist_ok=True)
 
     d_mains = [1, 2, 3, 4]
-    ns = [3000, 10000, 40000]
+    ns = [40000, 70000]
     alphas = [1.2, 5.0]
     for n, alpha, d_main in itertools.product(ns, alphas, d_mains):
         print(d_main, alpha, n)
@@ -22,7 +22,7 @@ if __name__ == '__main__':
             data, info = graph_kernels.multiple_girg_comparisons(
                 d=d_main, n=n, tau=2.5, alpha=alpha, desiredAvgDegree=60.0,
                 kernel=grakel.WeisfeilerLehman(n_iter=5, normalize=True),
-                n_per=9,
+                n_per=13,
                 d_max_girgs=4,
                 node_labelling_func=lambda g: graph_kernels.graph_to_labels(g, num_colors=None),
                 plot_type='boxplot')
@@ -37,4 +37,4 @@ if __name__ == '__main__':
         pickle.dump((fig, ax), open(f'{folder}/{title}.pkl', 'wb'))
         pickle.dump(data, open(f'{folder}/{title}.data.pkl', 'wb'))
 
-# sbatch --time=10:00:00 --ntasks=1 --cpus-per-task=2 --mem-per-cpu=16G --wrap="python do_graph_kernel_plots2.py"
+# sbatch --time=18:00:00 --ntasks=1 --cpus-per-task=3 --mem-per-cpu=16G --wrap="python do_graph_kernel_plots2.py"
