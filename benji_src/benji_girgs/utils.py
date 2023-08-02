@@ -663,17 +663,21 @@ def restrict_to_quantiles(pts, quantile=0.05):
 def restrict_and_uniformify_edges(pts, quantile=0.05):
     """centres the central quantile to a 0.05 - 0.95 cube, and then uniformly distributes the rest."""
     pts_new = pts.copy()
+    # this is the inner 0.05 to 0.95 cube
     pts_restricted, restriction = restrict_to_quantiles(pts, quantile=quantile)
-    pts_restricted = points.normalise_points_to_cube(pts_restricted) * 0.9 + 0.05
-    pts_new[restriction, :] = pts_restricted
+    # scale and shift all points s.t. inner 0.05 to 0.95 cube is actually 0.05 to 0.95
+    pts_new = (
+        pts_new - pts_restricted.min(axis=0)) / \
+        (pts_restricted.max(axis=0) - pts_restricted.min(axis=0)
+    ) * (1 - 2*quantile) + quantile
 
+    # now restrict the outer shell to the outer 0.05 to 0.95 cube
     n, d = pts.shape
-
     for i in range(d):
-        small = pts[:, i] < np.quantile(pts[:, i], quantile)
-        big = pts[:, i] > np.quantile(pts[:, i], 1-quantile)
-        pts_new[small, i] = (pts_new[small, i].argsort().argsort() / small.sum()) * 0.05
-        pts_new[big, i] = 0.95 + (pts_new[big, i].argsort().argsort() / big.sum()) * 0.05
+        small = pts[:, i] <= np.quantile(pts[:, i], quantile)
+        big = pts[:, i] >= np.quantile(pts[:, i], 1-quantile)
+        pts_new[small, i] = (pts[small, i].argsort().argsort() / small.sum()) * quantile
+        pts_new[big, i] =(1-quantile) + (pts[big, i].argsort().argsort() / big.sum()) * quantile
 
     return pts_new
 
