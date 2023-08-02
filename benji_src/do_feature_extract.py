@@ -6,8 +6,7 @@ import pandas as pd
 import glob
 
 import os
-os.environ['DATA_PATH'] = '/cluster/home/bdayan/girgs/FE_FB_copyweights_cube/'
-
+os.environ['DATA_PATH'] = '/cluster/home/bdayan/girgs/FE_FB_chunglu_with_tau/'
 
 def quick_mixin(my_list, end_per_begin=5):
     """[1,2,3,4,5,6,7,8,9,10], 3 -> [1,2,10,3,4,9,5,6,8,7] roughly"""
@@ -130,4 +129,4 @@ if __name__ == '__main__':
     # writer_pool.join()
 
 # sbatch --time=24:00:00 --ntasks=1 --cpus-per-task=12 --mem-per-cpu=2G --wrap="python do_feature_extract.py"
-# sbatch --time=24:00:00 --ntasks=1 --cpus-per-task=16 --mem-per-cpu=15G --wrap="python do_feature_extract.py"
+# sbatch --time=24:00:00 --ntasks=1 --cpus-per-task=3 --mem-per-cpu=16G --wrap="python do_feature_extract.py"
