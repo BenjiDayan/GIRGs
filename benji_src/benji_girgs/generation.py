@@ -26,26 +26,29 @@ def torus_uniform(d: int = 2, n: int = 1000) -> np.ndarray:
 
 
 def chung_lu_fit_c(g, weights):
-    """p_uv = min(1, c wu wv / W)
+    """p_uv = min(1, c wu wv)
+    NB we assume that weights are normalised so actually wu = w'u/sqrt(W)
+    so no need to normalise.
     we have to fit c so that sum p_uv is about the degree of g.
     We will do this in a dumb way...
     Basically we will assume that there is no need for min.
     Should hold for sparse graphs
 
     e.g. weights could be the degree sequence
+
+
     """
     num_edges = g.numberOfEdges()  # = (1/2) Sum p_uv
-    W = np.sum(weights)
     c = 1.0
     # triggered will ensure that c goes just small enough so that probs now less than 1
     triggered = False
     for _ in range(10):
-        probs = np.minimum(c * np.outer(weights, weights) / W, 1)
+        probs = np.minimum(c * np.outer(weights, weights), 1)
         E_edges = probs.sum() - np.diag(probs).sum()
         E_edges = E_edges / 2
         c = c * (num_edges / E_edges)
 
-    probs = np.minimum(c * np.outer(weights, weights) / W, 1)
+    probs = np.minimum(c * np.outer(weights, weights), 1)
 
     # c_copy = c
     # E_edges = probs.sum() - np.diag(probs).sum()
@@ -61,7 +64,8 @@ def fit_chung_lu(g, seed=None):
     return nk.generators.ChungLuGenerator.fit(g).generate()
 
 def chung_lu_get_stuff(g):
-    weights = graph_degrees_to_weights(g)
+    weights = np.array(graph_degrees_to_weights(g))
+    weights /= np.sqrt(weights.sum())
     c, probs_cl = chung_lu_fit_c(g, weights)
     chung_lu_ll = g_probs_to_ll(g, probs_cl)
     er_ll = ER_ll(g)
@@ -69,7 +73,7 @@ def chung_lu_get_stuff(g):
     g_cl = fit_chung_lu(g)
     g_cl_nx = nk.nxadapter.nk2nx(g_cl)
     A_cl = nx.linalg.adjacency_matrix(g_cl_nx).todense()
-    return chung_lu_ll, er_ll, A_cl, probs_cl
+    return chung_lu_ll, er_ll, A_cl, probs_cl, c
 
 def ER_ll(g):
     n, E = g.numberOfNodes(), g.numberOfEdges()
@@ -367,7 +371,7 @@ def const_conversion(const, alpha, d=None, true_volume=False):
 
 def chung_lu_mixin_graph(g, weights, cl_mixin_prob):
     g_out = nk.Graph(g.numberOfNodes())
-    c, probs_cl = chung_lu_fit_c(g, weights)
+    c, probs_cl = chung_lu_fit_c(g, weights / np.sum(weights))
     cl_override_mat = np.random.uniform(size=probs_cl.shape) < cl_mixin_prob
     # we only need to upper triangular one as doing an instersection
     cl_override_mat = np.triu(cl_override_mat, 1)

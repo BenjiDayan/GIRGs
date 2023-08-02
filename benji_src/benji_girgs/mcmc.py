@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 import networkit as nk
 import networkx as nx
 import numpy as np
+
 import scipy
 from sklearn.neighbors import KDTree
 
@@ -15,6 +16,7 @@ from tqdm import tqdm
 
 import seaborn as sns
 import os
+import pandas as pd
 
 
 class MCMC_girg():
@@ -61,6 +63,11 @@ class MCMC_girg():
 
         self.weights = weights / np.sqrt(weights.sum())
         self.weights_original = weights
+        if self.pool:
+            self.shared_weights = multiprocessing.Array(ctypes.c_double, self.weights.flatten())
+            self.weights = np.frombuffer(self.shared_weights.get_obj()).reshape(self.weights.shape)
+
+
         self.const_in = generation.const_conversion(const, alpha, d=self.d, true_volume=True)
         self.const = const
         self.alpha = alpha
@@ -76,19 +83,8 @@ class MCMC_girg():
 
         self.cl_mixin_prob=cl_mixin_prob
         if self.cl_mixin_prob > 0.0:
-            # weights = utils.graph_degrees_to_weights(g)
-            # c, probs_cl = generation.chung_lu_fit_c(g, weights)
-            # self.probs_cl = probs_cl
-            #
-            # import feature_extractor
-            #
-            # fe = feature_extractor.FeatureExtractor([])
-            # g_cl = fe.fit_chung_lu(g)
-            # gnx = nk.nxadapter.n
-            # k2nx(g_cl)
-            # A_cl = nx.linalg.adjacency_matrix(gnx).todense()ß
-
-            self.chung_lu_ll, self.er_ll, self.A_cl, self.probs_cl = generation.chung_lu_get_stuff(g)
+            # probs_cl = min(1, c * wu * wv)
+            self.chung_lu_ll, self.er_ll, self.A_cl, self.probs_cl, self.c_cl = generation.chung_lu_get_stuff(g)
 
             self.out_cl, self.percent_edges_captured_cl, self.percent_fake_edges_wrong_cl = CM(self.A, self.A_cl)
         else:
@@ -96,7 +92,7 @@ class MCMC_girg():
 
         # print('calibrating const')
         for _ in range(7):
-            self.ll, self.expected_num_edges = self.calculate_ll(mixin_probs=self.probs_cl, mixin_chance=self.cl_mixin_prob)
+            self.ll, self.expected_num_edges = self.calculate_ll()
             # print(f'const: {self.const}, expected_num_edges: {self.expected_num_edges}')
             self.calibrate_const()
 
@@ -115,37 +111,47 @@ class MCMC_girg():
         We should really use a MCMC log likelihood approach instead but this is a bit of a simpler hack.
 
         Actually a better hack we'll use this ratio trick :/ why not"""
-        # bigger = self.expected_num_edges < self.g.numberOfEdges()
-        # a = np.random.uniform()
-        # if bigger:
-        #     self.const = self.const * np.exp(a)
-        # else:
-        #     self.const = self.const * np.exp(-a)
         ratio = self.expected_num_edges / self.g.numberOfEdges()
         self.const = self.const/ratio
         self.const_in = generation.const_conversion(self.const, self.alpha, d=self.d, true_volume=True)
-    def calculate_ll(self, mixin_probs=None, mixin_chance=0.0):
+
+    # TODO wtf is this?
+    @staticmethod
+    def get_u_ll_and_expected_num_edges(u_index):
+        p_u_to_vs = self.get_p_u_to_vs(
+            self.weights, self.pts, self.alpha, self.const_in,
+            u_index, self.failure_prob, self.cl_mixin_prob,
+            self.c_cl
+        )
+        expected_num_edges = p_u_to_vs.sum()
+        expected_num_edges -= p_u_to_vs[u_index]
+        u_ll = self.p_u_to_vs_to_ll(self.g, u_index, p_u_to_vs)
+        return u_ll, expected_num_edges
+
+    def calculate_ll(self):
         """NB our iterative updating of self.ll is rather approximate, so would need to be
         recalculated from scratch periodically if we wanted to be more accurate"""
         # This is going to be double the actual LL as we double count edges
         ll = 0
         expected_num_edges = 0
         for u_index in range(self.n):
-            eps = 1e-7
-            p_u_to_vs = generation.get_probs_u(self.weights, self.pts, self.alpha, self.const_in, u_index)
-            p_u_to_vs *= (1 - self.failure_prob)
-            # E.g. you can mix in the ChungLu distribution to get a better LL...
-            if mixin_chance > 0:
-                p_u_to_vs = p_u_to_vs * (1 - mixin_chance) + mixin_probs[u_index] * mixin_chance
+            p_u_to_vs = self.get_p_u_to_vs(
+                self.weights, self.pts, self.alpha, self.const_in,
+                u_index, self.failure_prob, self.cl_mixin_prob,
+                self.c_cl
+            )
+
             expected_num_edges += p_u_to_vs.sum()
-            p_u_to_vs = np.clip(p_u_to_vs, eps, 1 - eps)
+            expected_num_edges -= p_u_to_vs[u_index]
+
             u_ll = self.p_u_to_vs_to_ll(self.g, u_index, p_u_to_vs)
             ll += u_ll
         return ll, expected_num_edges/2
 
     @staticmethod
     def p_u_to_vs_to_ll(g, u_index, p_u_to_vs):
-        """p_u_to_vs is a vector of probabilities of u to each v"""
+        """p_u_to_vs: vector of probabilities p(u ~ v) of u to each v
+        converts this into a total log likelihood"""
         out = 0
         n = g.numberOfNodes()
         assert n == len(p_u_to_vs)
@@ -158,33 +164,102 @@ class MCMC_girg():
         out += np.log(1 - p_u_to_vs[mask]).sum()
         return out
 
-    def update_ll(self, u_index, p_u_to_vs_old, p_u_to_vs_new):
-        """
-        In the adjacency matrix, we have a row u -> :, and then a column : -> u, which
-        intersect at u -> u (which is ignored anyways).
 
-        Hence we update the log likelihood twice, once for the row, once for the column.
-        Args:
-            u_index:
-            p_u_to_vs_old:
-            p_u_to_vs_new:
+    def ordered_point_propose_compare_update(self, num_proposals=100):
+        """Similar to mercator, does a round of ordered updates.
+        top weight nodes are updated first.
         """
-        u_ll_old = self.p_u_to_vs_to_ll(self.g, u_index, p_u_to_vs_old)
-        u_ll_new = self.p_u_to_vs_to_ll(self.g, u_index, p_u_to_vs_new)
-        self.ll += 2 * (u_ll_new - u_ll_old)
+        for u_index in np.argsort(-self.weights):  # largest to smallest
+            x_u = self.pts[u_index].copy()
+
+            nhbs = list(self.g.iterNeighbors(u_index))
+            mean_pos = self.pts[nhbs].mean(axis=0)
+
+            x_u2s = np.concatenate([
+                # near to current position
+                self.proposal(num_proposals//4, self.d, sigma=0.01, x_u=x_u, p_normal=0.7),
+                # near to mean position
+                self.proposal(num_proposals//4, self.d, sigma=0.01, x_u=mean_pos, p_normal=0.7),
+                # near to neighbours
+                self.proposal(num_proposals//2, self.d, sigma=0.01,
+                              x_u=self.pts[nhbs][np.random.choice(len(nhbs), size=num_proposals//2)],
+                              p_normal=0.7),
+            ])
+
+            x_u2s = np.concatenate([x_u2s, [mean_pos, x_u]])
+
+            lls = []
+            for x_u2 in x_u2s:
+                self.pts[u_index] = x_u2
+                p_u_to_vs2 = MCMC_girg.get_p_u_to_vs(
+                    self.weights, self.pts, self.alpha, self.const_in,
+                    u_index, self.failure_prob, self.cl_mixin_prob,
+                    self.c_cl)
+                u_ll_new = self.p_u_to_vs_to_ll(self.g, u_index, p_u_to_vs2)
+                lls.append(u_ll_new)
+
+
+            self.pts[u_index] = x_u2s[np.argmax(lls)]
+
+
+    def alpha_update(self, num_proposals=8):
+        """proposes num_proposals values of alpha, and updates to the one with the highest likelihood
+        (including the current value of alpha)"""
+        alpha_proposals = np.concatenate(
+            [np.random.uniform(1, self.alpha, size=num_proposals//2),
+             [self.alpha],
+             np.random.uniform(self.alpha, self.alpha + 2*(self.alpha - 1), size=num_proposals//2)]
+        )
+        lls = []
+        for alpha in alpha_proposals:
+            self.alpha = alpha
+            ll, _ = self.calculate_ll()
+            lls.append(ll)
+
+        self.alpha = alpha_proposals[np.argmax(lls)]
+
+    def ordered_pts_const_alpha_loop(self, num_pt_proposals=100, num_alpha_proposals=8, num_const_proposals=8,
+                                     num_loops=10):
+        """Does num_loops of ordered point updates, alpha update, const udpate"""
+        df = pd.DataFrame(columns=['loop', 'll', 'out', 'pec', 'alpha'])
+
+        for loop in range(num_loops):
+            self.ordered_point_propose_compare_update(num_pt_proposals)
+            self.alpha_update(num_alpha_proposals)
+            for _ in range(num_const_proposals):
+                self.ll, self.expected_num_edges = self.calculate_ll()
+                self.calibrate_const()
+            self.ll, self.expected_num_edges = self.calculate_ll()
+            g_out, A_out, out, percent_edges_captured, percent_fake_edges_wrong = self.get_CM(self.A)
+            self.lls.append((self.ll, loop))
+            self.percent_edges_captureds.append((percent_edges_captured, loop))
+            self.outs.append((out, loop))
+            row = {'loop': loop, 'll': self.ll, 'out': out, 'pec': percent_edges_captured, 'alpha': self.alpha}
+            print(row, flush=True)
+            df = df.append(row, ignore_index=True)
+
+        return df
 
     @staticmethod
-    def acceptance_prob_static(g, weights, alpha, const_in, pts, u_index, x_u2, prior_x_u=None, failure_prob=0.0):
+    def get_p_u_to_vs(weights, pts, alpha, const_in, u_index, failure_prob=0.0, cl_mixin=0.0, c_cl=1.0):
+        """for a given node u, get the vector p(u ~ v) (all v in V)"""
         eps = 1e-7
         p_u_to_vs = generation.get_probs_u(weights, pts, alpha, const_in, u_index)
         p_u_to_vs *= (1 - failure_prob)
+        if cl_mixin > 0:
+            p_u_to_vs_cl = np.minimum(1, c_cl * weights[u_index] * weights)
+            p_u_to_vs = (1 - cl_mixin) * p_u_to_vs + cl_mixin * p_u_to_vs_cl
         p_u_to_vs = np.clip(p_u_to_vs, eps, 1 - eps)
+        return p_u_to_vs
+
+    @staticmethod
+    def acceptance_prob_static(g, weights, alpha, const_in, pts, u_index, x_u2, prior_x_u=None, failure_prob=0.0, cl_mixin=0.0, c_cl=1.0):
+        p_u_to_vs = MCMC_girg.get_p_u_to_vs(weights, pts, alpha, const_in, u_index, failure_prob, cl_mixin, c_cl)
 
         x_u = pts[u_index].copy()
         pts[u_index] = x_u2
-        p_u_to_vs2 = generation.get_probs_u(weights, pts, alpha, const_in, u_index)
+        p_u_to_vs2 = MCMC_girg.get_p_u_to_vs(weights, pts, alpha, const_in, u_index, failure_prob, cl_mixin, c_cl)
         pts[u_index] = x_u
-        p_u_to_vs2 = np.clip(p_u_to_vs2, eps, 1 - eps)
 
         u_ll_old = MCMC_girg.p_u_to_vs_to_ll(g, u_index, p_u_to_vs)
         u_ll_new = MCMC_girg.p_u_to_vs_to_ll(g, u_index, p_u_to_vs2)
@@ -199,14 +274,19 @@ class MCMC_girg():
 
 
     def acceptance_prob(self, u_index, x_u2):
-        return self.acceptance_prob_static(self.g, self.weights, self.alpha, self.const_in, self.pts, u_index, x_u2, self.failure_prob)
+        return self.acceptance_prob_static(
+            self.g, self.weights, self.alpha, self.const_in, self.pts,
+            u_index, x_u2, failure_prob=self.failure_prob, cl_mixin=self.cl_mixin_prob, c_cl=self.c_cl)
 
+    # just step0 is used in .pool_step which is used in .step_pool which is used in .run
     def step0(self):
         u_index = np.random.randint(self.n)
         x_u2 = np.random.uniform(size=self.d)
         acceptance_prob, u_ll_old, u_ll_new, p_u_to_vs_old, p_u_to_vs_new = self.acceptance_prob(u_index, x_u2)
         return acceptance_prob, u_index, x_u2, u_ll_old, u_ll_new, p_u_to_vs_old, p_u_to_vs_new
 
+
+    # step0, step1, step2 are used in a non pool simple world
     def step1(self):
         acceptance_prob, u_index, x_u2, u_ll_old, u_ll_new, p_u_to_vs_old, p_u_to_vs_new = self.step0()
         if np.random.rand() < acceptance_prob:
@@ -259,6 +339,8 @@ class MCMC_girg():
                 self.ll_steps.append(self.num_steps)
 
 
+    # I've not updated this one so much as run_pool which was meant to be faster.
+    # run just uses a threadpool at best which is not as good as a processpool
     def run(self, n_steps, plot_every=None, pool_size=None, jobs_per_worker=5):
         start_steps = self.num_steps
         with tqdm(total=n_steps) as pbar:
@@ -329,7 +411,7 @@ class MCMC_girg():
         wacky_lls = np.array(self.lls[last_ll_step:])
         last_good_ll = wacky_lls[0]
         bad_current_ll = self.ll
-        self.ll, self.expected_num_edges = self.calculate_ll(mixin_probs=self.probs_cl, mixin_chance=self.cl_mixin_prob)
+        self.ll, self.expected_num_edges = self.calculate_ll()
         self.calibrate_const()
         better_lls = last_good_ll + ((self.ll - last_good_ll) / (bad_current_ll - last_good_ll)) * (
                     wacky_lls - last_good_ll)
@@ -432,11 +514,13 @@ class MCMC_girg():
         plt.plot(np.convolve(acceptances, np.ones(convolve_width) / convolve_width, mode='valid'))
 
     @staticmethod
-    def proposal(k, d, sigma, x_u, p_normal=0.7):
-        uniforms = np.random.uniform(size=(k, d))
-        normals = np.clip(x_u + np.random.normal(size=(k, d), scale=sigma), 0, 1)
-        mask = np.random.binomial(1, p_normal, k)
-        return mask * normals + (1 - mask) * uniforms
+    def proposal(num_proposals, d, sigma, x_u, p_normal=0.7):
+        if len(x_u.shape) == 2:  # allow proposals from multiple points
+            assert num_proposals == x_u.shape[0]
+        uniforms = np.random.uniform(size=(num_proposals, d))
+        normals = np.clip(x_u + np.random.normal(size=(num_proposals, d), scale=sigma), 0, 1)
+        mask = np.random.binomial(1, p_normal, num_proposals)
+        return mask[:, None] * normals + (1 - mask[:, None]) * uniforms
 
 
     def gen_girg(self):
@@ -470,8 +554,8 @@ class MCMC_girg():
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        del state['shared_pts']
-        del state['shared_pts_init']
+        state.pop('shared_pts', None)
+        state.pop('shared_pts_init', None)
         return state
 
     def __setstate__(self, state):
