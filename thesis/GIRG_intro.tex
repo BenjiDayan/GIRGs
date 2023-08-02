@@ -396,6 +396,54 @@ TODO
 \end{enumerate}
 
 
+We can see from \cref{fig:blasius_framework_table} that mimicking the features of real Facebook graphs with generations from a fit GGM is tough. Our numbers are on the whole so low compared to \cite{blasius2018towards}, however, because when we say e.g. feature set (n, m, deg), by deg we include 5 numbers per graph: mean node degree; lower, middle (median) and upper quartile node degree, and standard deviation over all node degrees. k-cores and comms numbers are taken over the actual core/community sizes - so are e.g. mean, median etc. community sizies within a graph.
+
+\paragraph{(effective) diameter}
+Only the features diam and eff-diam  are single numbers per graph - as just one number this is easier to mimick, e.g. the 2d, 3d cube GIRGs get $77\%$ accuracy. Cube GIRGs' having a more realistic effective diameter than toroidal GIRGs could just be a result of toroidal GIRGs having too small diameters compared to real graphs (and cube GIRGs having larger diameter than toroidal) \footnote{Looking at the features of real and generated graphs, the effective diameter of the FB graphs range from $3.0$ to $4.4$; 2d torus GIRGs on average $0.17$ less than their real counterparts, and 2d cube GIRGs just $0.04$ less.}, however it does fit our geometric intuition of the realism of cube geometry over toroidal.
+
+\paragraph{closeness centrality}
+To draw another example, for the n, m, close feature set, 2d GIRGs only achieve 98\% accuracy. Although this is quite bad, \cref{fig:real_2d_closeness_mean_scatter} shows that mean closeness fits very accurately to the real graphs. However due to a consistently lower standard deviation of closeness in the GIRGs, and the fact that the standard deviation of closeness in real graphs fits well as a function of number of nodes, the 2d GIRGs are distinguishable from real graphs on this feature set. I would argue that 2d GIRGs did a pretty good job on replicating closeness in real graphs, so the high accuracy of 98\% is a little misleading.
+
+Classification accuracy is a crude metric, but should at least be a point of comparison between GGMs. 
+A drawback of this framework is that the attainable accuracy is also affected by the variety / predictability of a feature set across the real graph dataset - whatever the real graphs are doing, the GGMs have to do too - but more variance is easier to blend in with than a strict pattern. Our GGMs furthermore are much more likely to produce a set of similar graphs following a strict pattern.
+
+\paragraph{copying weights}
+The first column of copy weight cube GIRGs in \cref{fig:blasius_framework_table} have much better classification accuracy than the rest (apart from ChungLu which also copies the real-graph degrees as weights). We can compare between GIRG and ChungLu to see what affect uniform geometry has. It would also be interesting to compare the configuration model \footnote{Each node is given a set number of "half edges" which gives it a set degree (the degree sequence can be random e.g. power law generated, or given e.g. copied directly from a real graph. Half edges are then joined together at random.)} with copied degrees as the "null hypothesis" against these. In notably geometric feature categories like LCC, and diameter GIRGs indeed out perform ChungLu. ChungLu does better on community size statistics; communities could arguably spring from geometry, but GIRGs' uniformly random geometry isn't really designed for this - you could rather imagine a more realistic setup if node locations were taken from a mixture of gaussian distributions (e.g. a university town might have age/occupation clusters of student age vs working age, or academic vs non-academic peoples).
+
+
+
+
+
+
+\begin{figure}
+    \centering
+    \begin{subfigure}{0.49\textwidth}
+    \includegraphics[width=\linewidth]{./figures/real_2d_closeness_mean_scatter.png}
+    \caption{2d GIRGs have almost identical mean node closeness to real-world FB graphs}
+    \label{fig:real_2d_closeness_mean_scatter}
+    \end{subfigure}
+    \begin{subfigure}{0.49\textwidth}
+    \includegraphics[width= \linewidth]{./figures/real_2d_closeness_std_scatter.png}
+    \caption{2d GIRGs have consistently lower standard deviation of node closeness than real-world FB graphs}
+    \end{subfigure}
+    \begin{subfigure}{0.49\textwidth}
+    \includegraphics[width=\linewidth]{./figures/real_closeness_std_against_n.png}
+    \caption{standrd deviation of node closeness in real-world FB graphs fits well as a function of number of nodes}
+    \end{subfigure}
+\end{figure}
+
+(cube GIRGs having slightly larger diameters - to get from one edge of the cube to the opposite), but does fit our geometric intuition.
+
+
+does slightly fit our intuition of their more realistic geometry. Funnily enough Cube GIRGs fit on the dataset have 
+
+just mean that toroidal GIRGs have too large diameters compared to real graph (cube GIRGs having smaller diameters), but does fit our geometric intuition.
+
+2+d min girgs we expect to have very large diameters.
+
+
+
+
 % \begin{sidewaystable}
 %     \centering
 %     \caption{Feature Set Performance}
@@ -421,15 +469,15 @@ TODO
     % \begin{subfigure}
     \includegraphics[width=\textwidth]{./figures/Blasius_framework_table.png}
     \caption{\cite{blasius2018towards} GGM comparison framework on Facebook graphs, extended to different GIRG models. Classification accuraciese by SVM use various feature sets. We chose to focus on feature sets involving one core feature (mean, quartile and standard deviation statistics) on top of just number of nodes and edges. If just one of mean/median is used, accuracies are often lower, sometimes even in $50\%-70\%$. $50\%$ is the best possible validation of a GGM as indistinguishable from real data, and is only achieved for feature set $n, m, LCC \;\text{mean}$ (by GIRGs and not the other none geometric GGMs). Some models are missing from the table e.g. 3d-6d GIRGs as their results follow a trend from low to high dimension.
-    %
-    The model type }
+    }
+    \label{fig:blasius_framework_table}
     % \end{subfigure}
     \vspace{1em}
     \centering
     % \begin{subfigure}
     \begin{tabular}{|c|c||c|c|}
         \hline
-        1-co & 1d copy weight cube GIRG 
+        1-ccu & 1d copy weight cube GIRG 
         & betw & betweenness centrality
         \\
         1-23 & $1 \lor (2 \land 3)$ mixed min/max GIRG
@@ -444,20 +492,21 @@ TODO
         7d & 7d GIRG
         & deg & node degree
         \\
-        \hline
         CL & ChungLu
         & Katz & node Katz centrality
         \\
-        BA & Barabasi-Albert
+        CL-c & copy weight ChungLu
         & PR & node PageRank
         \\
-        ER & Erdos-Renyi
+        BA & Barabasi-Albert
         & comms & community sizes
         \\
-        hyper & Hyperbolic
+        ER & Erdos-Renyi
         & k-cores & k-core sizes
         \\
-        && diam & graph diameter\\
+        hyper & Hyperbolic Random Graph &
+        diam & graph diameter
+        \\
         && eff-diam & graph effective diameter\\
         \hline
     \end{tabular}

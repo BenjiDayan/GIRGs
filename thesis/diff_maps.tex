@@ -1,7 +1,7 @@
 \chapter{Diffusion Maps}
 \section{Introduction}
 
-Diffusion Maps are a technique for discovering underlying geometricity of a graph $G=(V,E)$ solely from the connectivity. We will put the technique to use in order to invert the GIRG generative process - go from a graph produced by a $d$-dimensional GIRG, and infer the original locations $(x_u)_{u\in V}$ of the vertices $x_u \in \T^d$.
+Diffusion Maps are a technique for discovering the underlying geometry of a graph $G=(V,E)$ solely from the connectivity. We will put the technique to use in order to invert the GIRG generative process - go from a graph produced by a $d$-dimensional GIRG, and infer the original locations $(x_u)_{u\in V}$ of the vertices $x_u \in \T^d$.
 
 The idea of Diffusion Maps is to analyse the diffusion process of random walking on the edges of the graph, and to characterise the probability cloud starting from one node in the graph as a sum of decreasingly important contributions, along the line of eigenvectors of decreasing eigenvalues from a diagonalisable matrix. The top $d$ contributions can then be used as a coordinate system to describe each point in the graph. By taking a large timestep diffusion cloud, the general relative location of the initial point is the main signal. The hope is that if connections (probabilistically) follow a geometry of $d$-dimensions, then the diffusion map coordinate system will capture / align with this real geometry.
 
@@ -33,32 +33,164 @@ Notably the transition matrix satisfies $M\vec{1} = \vec{1}$ since $\sum_j \frac
 Then the diffusion map representation of a node is then
 \begin{align*}
   & e_i^T M = \sum_{k=1}^n \phi_i(k) \lambda_k^t \vec{\psi}_k \quad & \text{diff map of node $i$ after $t$ steps}\\
-  & i \mapsto (\phi_2(i) \lambda_2^t,... \phi_{m+1}(i) \lambda_{m+1}^t) \quad & \text{m-truncated diff map representation}
+  & i \mapsto (\phi_2(i) \lambda_2^t,... \phi_{m+1}(i) \lambda_{m+1}^t) = \vec{\varphi}(v_i) \quad & \text{m-trunc diff map representation}
 \end{align*}
 %
 The truncated diffusion map summarises the distinguishing features of a node's random walk cloud after $t$ steps, by taking the scale factor of $\vec{\psi}_k$ ($\vec{\psi}_k$ itself is ignored as it's relatively normalisesd: $\vec{\psi}_k = \vec{d}^{1/2} \odot \vec{v}_k$ (TODO is this really normalised?)). Since $\vec{\phi}_1 = c \vec{1}$, the first coordinate is dropped as it's useless for distinguishing nodes. This corresponds to the fact that the diffusion cloud starting at any node converges as $t \to \infty$ to the same stationary distribution $\vec{\pi}_i = \frac{d_i}{\sum_j d_j}$.
 
+\subsection{Improving diffusion map geometry}
+We ideally want the diffusion map embedding of a GIRG generated graph to have similar distances to the original geometry:  $\norm{\vec{\varphi}(u) - \vec{\varphi}(v)} \approxeq \norm{\vec{x}_u - \vec{x}_v}$. 
 
-We attempt to improve the diffusion map process for GIRGs. In particular, we'd like the random walk to prioritise edges going to nodes with low degree, as these are more likely to be the neighbours of the node in the underlying geometry. We do this by modifying the transition matrix $M$ to $\tilde{M}$ as follows:
+\paragraph{TODO remove or figure out?}
+One approach takes after \cite{garcia2019mercator}. They use theory based off of the laplacian eigenmap interpretation of diffusion maps, originally introduced by \cite{belkin2001laplacian}. In this framing, the diffusion map solution is actually a minimisation problem of the objective function $\sum_{i,j} W_{ij} \norm{\vec{\varphi}(u) - \vec{\varphi}(v)}^2 =  tr(Y^T L T)$. This is construed as finding a lower dimensional embedding of a continuous manifold of which we have $n$ sample points $\vec{z}_1, ..., \vec{z}_n$; there is an additional first step of converting $\vec{z}_i$ into a graph $G$ with edge weights $W_{ij} = e^{-\norm{\vec{z}_i - \vec{z}_j}^2 / T}$, for some parameter $T > 0$. Then the laplacian matrix $L = D-W$. The justification for these edge weights is that the objective $tr(Y^T L Y)$ then becomes a good approximation for the continuous integral $\int \sum_{i=1}^m \varphi_i L \varphi_i d\vec{z}$, viewing $\varphi(i)$ as a function $\varphi: \cM \to \R$. The minimizer of this integral is supposed to create minimal variation $||\nabla \varphi_i||^2$ gradient which then yields good something geometry?????
 
+\paragraph{Laplacian Eigenmap inspired edge weights}
+One approach takes after \cite{garcia2019mercator}. They use theory based off of the laplacian eigenmap interpretation of diffusion maps, originally introduced by \cite{belkin2001laplacian}. In this framing, the diffusion map solution is actually a minimisation problem of the objective function $\sum_{i,j} W_{ij} \norm{\vec{\varphi}(u) - \vec{\varphi}(v)}^2 =  tr(Y^T L Y)$. This is construed as finding a lower dimensional embedding of a continuous manifold embedded in a higher dimensional space $\R^l$ of which we have $n$ sample points $\vec{z}_1, ..., \vec{z}_n \in \R^l$. There is an additional first step of converting $\vec{z}_i$ into a graph $G$ with edge weights $W_{ij} = e^{-\norm{\vec{z}_i - \vec{z}_j}^2 / T}$, for some parameter $T > 0$. This edge weight kernel function makes nearby points more important to the minimisation problem - as they should be in order to capture a manifold. While GIRG geometry is not points on manifold, nodes do have edges to close by neighbours and further away neighbours, and we'd similarly like to prioritize the close by neighbours in the diffusion map embedding.
+
+As per \cite{garcia2019mercator} we can modify the weight matrix $W_{uv} = 1_{u \sim v}$ to resemble the exponential decay of squared distances in higher dimensional manifold embedded space.
+
+If $u \sim v$, then  $E[r_{uv} | w_u, w_v, u \sim v] = \Theta \left [ \left ( \frac{w_u w_v}{n} \right )^{1/d} \right ]$, assuming that $\alpha > 1 + \frac{1}{d}$. We can use the node weight estimates by degree of $\hat{w}_u = d_u$ to get distance estimates $\hat{r}_{uv} = \left ( \frac{w_u w_v}{n} \right )^{1/d}$. Finally edge weights are $W_{uv} = e^{-\hat{r}_{uv}^2 / T}$, i.e. decaying with predicted distance.
+
+\paragraph{Random walk modifying edge weights}
+An approach that has a simialr effect as the Laplacian Eigenmap estimated edge distance weights is to modify the diffusion map random walk so as to make it maximally geometric. Then the hope is that the eigenvector decomposition will better reflect this geometry.
+
+We modify the transition matrix $M$ to prioritise edges going to nodes with low degree, as this is more likely to be a small step in the geometric space rather than a longer jump to a higher weight node. 
 \begin{align*}
-  \tilde{M} = \tilde{D} M D^{-\gamma}
+  M_{uv} &\gets \frac{M_{uv} {d_v^\gamma}}{\sum_{v'} M_{uv'} {d_{v'}^\gamma}}
+  \\
+  M &\gets D' M D^{-\gamma} \quad \text{(diagonal $D'$ normalises probabilities)}
 \end{align*}
-Where $\tilde{D}$ is to normalise $\tilde{M}$ to ensure that it's still a row stochastic matrix: $\sum_j \tilde{M}_{ij} = 1$. The tuning parameter $\gamma > 0$ directly controls the bias towards low degree nodes: $M_{ij} d^{-\gamma}_j$ means that nodes $j$ with high $d_j$ have a relatively lowered transition probability.
-This unfortunately messes up all our nice equations. $\tilde{M}$ is still row stochastic, which means it still has a largest magnitude eigenvalue $\lambda_1 = 1$, and by the Gershgorin circle theorem, all other $|\lambda_i| \leq 1$.
 
-We can write it as $\tilde{M} = D_1 \Phi \Lambda \Psi^T D^{-\gamma}$. This does at least allow the decomposition $\tilde{M} = \sum_k \lambda_k \vec{\tilde{\phi}}_k \vec{\tilde{\psi}}_k$, where $\vec{\tilde{\phi}}_k = D_1 \vec{\phi}_k$ and $\vec{\tilde{\psi}}_k = D^{-\gamma} \vec{\psi}_k$. In particular, $\tilde{M} (D_2^{-1} \vec{\phi}_k) = \lambda_k D_1 \vec{\phi}_k$. This does not mean that $\tilde{M}$ has eigenvalues $\lambda_i$, rather they're slightly different.
 
-Instead we hope that $\tilde{M}$ is diagonalisable as $\tilde{M} = BAB^{-1}$ for diagonal $A$, and use the corresponding diffusion map representation $i \mapsto (\vec{b}_2(i) a_2^t,... \vec{b}_{m+1}(i) a_{m+1}^t)$.
+% \begin{align*}
+%   \widetilde{M} = D' M D^{-\gamma}
+% \end{align*}
+% Where $D'$ is to normalise $\widetilde{M}$ to ensure that it's still a row stochastic matrix: $\sum_v \widetilde{M}_{uv} = 1$. The tuning parameter $\gamma > 0$ directly controls the bias towards low degree nodes: $M_{ij} d^{-\gamma}_j$ means that nodes $j$ with high $d_j$ have a relatively lowered transition probability. Then 
 
-Actually no hope for diagonalisability is needed. This process can be viewed as modifying the adjacency matrix $W_{ij}$ to have not all $1$ weights, instead having weights e.g. $d_i^{-\gamma}d_j^{-\gamma}$. This is done all at the start, so then $S = D^{-1/2} W D^{-1/2}$ is well defined using $D_ii = \sum_{j \neq i} W_{ij}$, and $M = D^{-1} W$ is still a valid probability transition matrix. Indeed it involves $M_{ij} = \frac{W_{ij}}{D_{ii}}$ which comes out with the same $d_j^{-\gamma}$ weighting as previously hoped for.
 
-Another interpretation of this is following:
-heat kernel?? wtf. See Belkin Nyiogi Laplacian Eigenmaps for Dimensionality Reduction and Data Representation
 
-The logic roughly goes: Belkin Nyiogi suggest converting a geometric distribution into a graph via $W_{ij} = e^{-||x_i - x_j||^2}{T}$ for some parameter $T > 0$. We're given a straight graph, but using the GIRG assumption, we know that $u \sim v$ means roughly that $r_{uv} \approxeq \left ( \frac{w_u w_v}{n} \right )^{1/d}$. I.e. we can plug this guess in to give smaller weights to edges between nodes with high degree, analgously to the above approach of setting $W_{ij} = d_i^{-\gamma} d_j^{-\gamma}$.
+This modification of transition probabilities is viewed more properly as modifying original edge weights such that $W_{uv} = k(d_u) k(d_v) \approxeq k(w_u) k(w_v)$, where $k(d_u) = d_u^{-\gamma}$.
+
+Picking $\gamma=1$ seems like a good start - in powerlaw weighted GIRGs, it counteracts the tendency for a node's neighbours to have a shifted weight distribution. I.e. in the base $W_{uv} = 1$ for $u \sim v$  model, the next state of the random walk starting at $u$ uniformly randomly samples a neighbour $v \sim u$ which then has weight $w_v \sim \powerlaw(\tau - 1)$; our modified random walk has $w_v \sim \powerlaw(\tau)$, matching the original node weight distribution. With no assumptions on the weight distribution, it should also mean that the random walk stationary distribution is more like a constant $1$ distribution rather than the known $\pi_u \propto d_u$ distribution.
+
+We can see this by using the fact that the modified weighted degree is now $\tilde{d}_u = \sum_{v \sim u} d_u^{-1} d_v^{-1} = d_u^{-1} \sum_{v \sim u} d_v^{-1}$, and hence the stationary distribution has $\pi_u \propto \tilde{d}_u$. For graphs where most nodes have a decent number of neighbours spread across lower and higher degree nodes, then $\sum_{v \sim u} d_v^{-1} = \Theta(d_u)$, and so $\pi_u \propto d_u^{-1} d_u = 1$. A simplification is to say that a node $u$ in the GIRG with $50$ neighbours then has 
+\begin{align}
+  \tilde{d}_u = \frac{1}{50} \sum_{v \sim u} d_v^{-1} \approx \sim  \frac{1}{50}
+% \left [ 50\, \theta + \sqrt{50}\, \theta' N(0, 1) \right ]
+N(50\, \theta, 50 \, \sigma^2)
+= \theta + \sigma \frac{N(0, 1)}{\sqrt{50}} \approxeq \theta
+\end{align}
+where $0 < \theta, \sigma < 1$, by taking a normal approximation of the sum of $50$ iid random variables.
+
+We can examine the distances taken. Again assuming $\alpha > 1 + \frac{1}{d}$, we can take $E[r_{uv} | w_u, w_v, u \sim v] = \Theta(w_v^{1/d})$ means that $E[r_{uv} | w_u, u \sim v]$ is $\int \Theta(w^{1/d}) w^{1-\tau} dw$ in the original random walk, and $\int \Theta(w^{1/d}) w^{-\tau} dw$ in the modified random walk. For a fixed $d$, if $2 < \tau < 2 + 1/d$ then in the original random walk the expected distance covered in one hop is "infinite" (covering the whole geometric space), whereas in the modified random walk it is bounded. Even bounded so, the distance covered can still be large, and decays slowly as a power law $r_{uv} |_{w_u, w_v} \; \sim \powerlaw( (\alpha - 1)d)$.
+
+\paragraph{quantifying the exact diffusion distance} We'd like to actually get a handle on the diffusion distance. Consider two points $x_u; x_v = x_u + \delta$ for a small distance $\delta$.
+
+We look at diffusion out from point $x_u$.
+My mistake: the neighbours $r_{uv} | w_u, w_v$ looks more like $d r^{d-1}$ for $r < c (w_u w_v)^{1/d}$ and then $d r^{-1 -d(\alpha-1)}$ for $r > c(w_u w_v)^{1/d}$ - must differentiate $r^d$ volume to get rate of change of volume.
+
+It seems like the latter dominates anyway? Or at least we can focus on it?
+
+In particular $d r^{-1 -d(\alpha -1)}$ is $r \sim \powerlaw(1 + d(\alpha-1))$, so has finite mean if $\alpha > 1 + \frac{1}{d}$, and finite variance if $\alpha > 1 + \frac{2}{d}$.
+
+We can then apply the central limit theorem if both hold: If $X_i$ are r.v.s with finite $\mu, \sigma$, then $\sum_{i=1}^n X_i \to N(n \mu, n \sigma^2)$. The simplistic interpretation then of our random walk is that $X$ is the a vector step with $\norm{X} = r$ but $E[X] = 0$. Then $E[r^2] < \infty$ means that $\sigma^2 < \infty$ is the variance of the step. Then the random walk after $t$ steps is roughly $N(0, t \sigma^2)$.
+
+Now we can apply Lemma
+\begin{align}
+p, q \sim N(\vec{0}, \sigma^2 I), N(\vec{\Delta}, \sigma^2 I)\\
+\norm{p - q}^2_{L2} = \int (p-q)^2 d\vec{x} = \frac{2}{(4 \pi )^{d/2} \sigma^d} \left [ 1 - \exp(-\frac{\norm{\vec{\Delta}}^2}{4 \sigma^2}) \right ]
+\end{align}
+
+So now sub in $t \sigma^2$ into the $\exp \left ( 
+  -\frac{\norm{\vec{\Delta}}^2}{4 t \sigma^2}
+\right )
+$
+Then as long as $\norm{\vec{\Delta}}^2 \ll 4 t \sigma^2$ we get $\norm{p - q}^2_{L2} \approxeq \frac{\norm{\vec{\Delta}}^2}{4 t \sigma^2}$.
+
+We can plug this into the diffusion distance Lemma
+
+\begin{align}
+\norm{\vec{\varphi}^t(u) - \vec{\varphi}^t(v)}^2 = \sum_{q} \frac{1}{d_q} (P^t_{uq} - P^t_{vq})^2
+\end{align}
+again using that the modified $d_q = \Theta(1)$, to get that the diffusion distance is $\norm{\vec{\varphi}^t(u) - \vec{\varphi}^t(v)}^2 \approxeq \frac{\norm{\vec{x_u} - \vec{x_v}}^2}{4 t \sigma^2}$.
+
+Funnily enough it seems like we didn't really need to modify the random walk to get this result, although it was nice to have $d_q = \Theta(1)$ rather than $d_q \sim \powerlaw(\tau)$ (actually the normalisation seems to handle this fine). Rather the neighbour hop distances are all like $r_{uv} \sim \powerlaw(1 + d(\alpha-1))$, regardless, for a fixed $w_u, w_v$. However the $c (w_u w_v)^{1/d}$ threshold does mean that the expected distance covered is much larger in the original random walk - i.e. $\sigma$ is larger. Somehow having large $\sigma$ of the r.w. must be a bad thing. Or maybe it's just nicer to have a more consistent $\sigma$ across the random walk. I'm gonna go with that.
+
+% One idea is that if you take the diffusion map $\varphi(u)^t_i = \lambda_{i+1}^t \phi_{i+1}(u)$, then if we take too high $t$ our embedding is squished (but we can unsquish it, or just ignore the $\lambda_{i+1}$)
+
+One funny thing is that $t$ doesn't seem to affect the diffusion map embedding (bar $\lambda_i^t$ but do we care about that), whereas in this CLT case we want high $t$.
+
+Perhaps having stationary distribution concentrate more heavily on high degree nodes makes our diffusion distance estimator have higher variance? But I wonder then if the $\frac{1}{d_q}$ fixes that naturally? 
+
+
+
+% Using the Lemma that $r_{uv} |_{w_u, w_v} \; \sim \Theta(w_v^{1/d}) -1 + \powerlaw( (\alpha - 1)d)$, we can actually quantify directly
+
+
+
+%   \pi_u P_{uv} &= \pi_v P_{uv}
+%   \\
+%   \pi_u \frac{d_u^{-1} d_v^{-1}}{\sum_{v' \sim u} d_u^{-1} d_{v'}^{-1}} &= \pi_v \frac{d_v^{-1} d_u^{-1}}{\sum_{u' \sim v} d_v^{-1} d_{u'}^{-1}}
+%   \\
+%   \pi_u \frac{1}{d_v \sum_{v' \sim u} d_{v'}^{-1}} &= \pi_v \frac{1}{d_u \sum_{u' \sim v} d_{u'}^{-1}}
+%   \\
+%   \implies \;\; \approx \;\; \pi_u \frac{1}{d_v d_u} &= \pi_v \frac{1}{d_u d_v}
+% \end{align}
+
+% Where in the last line we use that if $v' \sim u$ then $E[d_{v'}^{-1}] = \Theta(1)$. In practice for graphs where most nodes have a decent number of neighbours spread across lower and higher degree nodes, the stationary distribution is indeed close to uniform - e.g. a simplification is to take a node $u$ with $50$ neighbours, and state the 
+
+The modified random walk ends up looking more like taking small steps in the geometric space in a random direction, as seen in \cref{fig:diffmap_algo_comparisons}. We can actually attempt to tie back the produced diffusion map embedding distances to the GIRG geometry using the equation. TODO cite Coifman and Lafon and go into diffusion distances.
+
+
+% This unfortunately messes up all our nice equations. $\widetilde{M}$ is still row stochastic, which means it still has a largest magnitude eigenvalue $\lambda_1 = 1$, and by the Gershgorin circle theorem, all other $|\lambda_i| \leq 1$.
+
+% We can write it as $\widetilde{M} = D_1 \Phi \Lambda \Psi^T D^{-\gamma}$. This does at least allow the decomposition $\widetilde{M} = \sum_k \lambda_k \vec{\widetilde{\phi}}_k \vec{\widetilde{\psi}}_k$, where $\vec{\widetilde{\phi}}_k = D_1 \vec{\phi}_k$ and $\vec{\widetilde{\psi}}_k = D^{-\gamma} \vec{\psi}_k$. In particular, $\widetilde{M} (D_2^{-1} \vec{\phi}_k) = \lambda_k D_1 \vec{\phi}_k$. This does not mean that $\widetilde{M}$ has eigenvalues $\lambda_i$, rather they're slightly different.
+
+% Instead we hope that $\widetilde{M}$ is diagonalisable as $\widetilde{M} = BAB^{-1}$ for diagonal $A$, and use the corresponding diffusion map representation $i \mapsto (\vec{b}_2(i) a_2^t,... \vec{b}_{m+1}(i) a_{m+1}^t)$.
+
+% Actually no hope for diagonalisability is needed. This process can be viewed as modifying the adjacency matrix $W_{ij}$ to have not all $1$ weights, instead having weights e.g. $d_i^{-\gamma}d_j^{-\gamma}$. This is done all at the start, so then $S = D^{-1/2} W D^{-1/2}$ is well defined using $D_ii = \sum_{j \neq i} W_{ij}$, and $M = D^{-1} W$ is still a valid probability transition matrix. Indeed it involves $M_{ij} = \frac{W_{ij}}{D_{ii}}$ which comes out with the same $d_j^{-\gamma}$ weighting as previously hoped for.
+
 
 The way we benchmark all these approaches is by generating a graph $G$ with a GIRG (potentially a slightly wonky one), and looking at the correlation coefficient of pts and pts dm. We see that both heat kernel method and $D^{-\gamma}$ method outperform baseline, and $D^{-\gamma}$ method outperforms heat kernel method, using about $\gamma=0.9$. welp.
+
+
+\begin{figure}
+  \centering
+
+  \begin{subfigure}{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/2d_GIRG_RW.png}
+    \caption{Node probabilities from a random walk of 6 steps starting at one node in a 2D torus GIRG. Large weight nodes (drawn with larger pt sizes) get disproportionately more probability mass.}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/2d_GIRG_RW_small_weights.png}
+    \caption{Restriction of previous plot to nodes with smaller weights. Probability distribution looks more geometrically gaussian}
+  \end{subfigure}
+
+  \vspace{1em}
+
+  \begin{subfigure}{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/2d_GIRG_heatkernelscaled_RW.png}
+    \caption{heat kernel scaled edge weights $W_{ij} = e^{-||x_i - x_j||^2}$. Helps to remove the large weight bias - perhaps a little too much.}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/2d_GIRG_degscaled_RW.png}
+    \caption{Scaling transition probabilities by node degree $d_i^{-1}$  also removes the large weight bias.}
+    \label{fig:diffmap_algo_comparisons_degscaled}
+  \end{subfigure}
+  \label{fig:diffmap_algo_comparisons}
+  \caption{Shown here is the 6 step random walk diffusion cloud starting at the node marked with the green x.}
+  % \caption{Diffusion map eigenvalues (including $\lambda_1 = 1$) for a $n=2000, \tau=2.5, \alpha=1.3$ Cube GIRG with $d=1,2,3,4$ dimensions.}
+  % \label{fig:cube_diffmaps_d1to4}
+\end{figure}
+
+
+
 % % 
 % The m-truncated diffusion map representation becomes the new r epresentation of nodes in the graph. The diffusion map is then a function $\R^n \to \R^m$. The first coordinate $\lambda_1$ is always $1$, corresponding to the stationary distribution of the random walk which all node diffusion maps converge to. This is useless for differentiating nodes and is hence dropped.
 
@@ -93,9 +225,36 @@ If furthermore we're certain that the distribution within the unit cube should b
 
 Critically since there is no guarantee that the scaling of diffusion map coordinates is the same as the original GIRG coordinates, using some kind of prior knowledge to rescale the diffusion map is important to yield geometric information with meaningful inter-point distances.
 
-\paragraph{Rotated Points} One issue with diffusion maps as seen in \cref{fig:cube_diffmap_plots_d2}, the 2D GIRG's 2D-truncated diff map looks like a rotated square. While the diffusion map has successfully extracted geometric information from the graph, it's not done so in the original basis. This phenomenon can make rescaling and uniformifying to the unit cube a little questionable.
+Even in the ideal case of a graph generated from a uniform cube GIRG, we see that the diffusion map doesn't have a quite linear relationship with the real locations. In \cref{fig:2d_distorted_major} we see a sin wave like relationship - this actually makes sense as eigenfunctions of the laplacian operator on a cube look like sine waves. Note we took this from a distorted GIRG 
 
-\paragraph{Non-cube GIRGs} However in practice, real graphs never have an equal balance in geometric dimension importance. This is easiest to understand with the example of a weighted euclidean norm setup, where it could be that a 2D GIRG's true 1st geometric dimension (between $[0, 1]$) is much more important than its 2nd geometric dimension in influencing edge probabilities: $\norm{x - y} = \sqrt{a (x_1 - y_1)^2 + b(x_2 - y_2)^2}$.
+\begin{figure}
+  \centering
+
+  \begin{subfigure}{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/2d_distorted_diffmap_plot_major.png}
+    \caption{$d=1$}
+    \label{fig:2d_distorted_major}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/2d_distorted_diffmap_plot_minor.png}
+    \caption{$d=2$}
+    \label{fig:2d_distorted_minor}
+  \end{subfigure}
+
+
+  \caption{Major and minor diff map against real}
+  \label{fig:2d_distorted_major_minor}
+\end{figure}
+
+
+\paragraph{Rotated Points} One issue with diffusion maps as seen in \cref{fig:cube_diffmap_plots_d2}, the 2D GIRG's 2D-truncated diff map looks like a rotated square. While the diffusion map has successfully extracted geometric information from the graph, it's not done so in the original basis. This phenomenon can make rescaling and uniformifying to the unit cube a little questionable. 
+
+One possible explanation is that as diffusion map is trying to maximise diffusion explainability, the long square diagonal has overall more diffusion along it. This is not very convincing though as there would then be less diffusion in the opposite corners. Even assuming no overall rotation bias, you're going to get a square rotated somewhere between $0$ and $45$ degrees.
+
+\paragraph{Cuboidal (non-cube) GIRGs} However in practice, real graphs never have an equal balance in geometric dimension importance. This is easiest to understand with the example of a weighted euclidean norm setup, where it could be that a 2D GIRG's true 1st geometric dimension (between $[0, 1]$) is much more important than its 2nd geometric dimension in influencing edge probabilities: $\norm{x - y} = \sqrt{a (x_1 - y_1)^2 + b(x_2 - y_2)^2}$.
 The diffusion map is solving an eigenvalue problem that is like a maximsation of diffusion explainability. If $a > b$, then by maximisation the first diffusion map coordinate $\varphi_1(u)$ is likely to be very similar to $(\vec{x}_u)_1$. Only if $a=b$ is there no preference between $(\vec{x}_u)_1$ and $(\vec{x}_u)_2$, making a rotation possible.
 Hence the points $(\varphi_1(u), \varphi_2(u))_{u \in V}$ are likely to end up as a rectangle, not a rotated square; the variation in first coordinate will be greater than in the second.
 
@@ -158,14 +317,14 @@ The relative flatness of $\lambda_2, \lambda_3, \lambda_4, \lambda_5$ line segme
 
     \begin{subfigure}{0.49\textwidth}
       \centering
-      \includegraphics[width=\linewidth]{figures/diffmap_1d_plot.png}
+      \includegraphics[width=\linewidth]{figures/1d_GIRG_diffmap.png}
       \caption{$d=1$}
       \label{fig:sub1}
     \end{subfigure}
     \hfill
     \begin{subfigure}{0.49\textwidth}
       \centering
-      \includegraphics[width=\linewidth]{figures/diffmap_2d_plot.png}
+      \includegraphics[width=\linewidth]{figures/2d_GIRG_diffmap.png}
       \caption{$d=2$}
       \label{fig:cube_diffmap_plots_d2}
     \end{subfigure}
@@ -217,33 +376,74 @@ The relative flatness of $\lambda_2, \lambda_3, \lambda_4, \lambda_5$ line segme
 \begin{figure}
   \centering
 
-  \begin{subfigure}{0.9\textwidth}
+  \begin{subfigure}{\textwidth}
     \centering
-    \includegraphics[width=\linewidth]{figures/Rice31_2d_diffmaps}
-    \caption{Rice31}
-    \label{fig:sub1}
+    \includegraphics[width=\linewidth]{figures/socfb-Rice31_2ddiffmap_unif_vs_restrict.png}
+    % \label{fig:sub1}
+  \end{subfigure}
+
+  \vspace{1em}
+  \begin{subfigure}{\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/socfb-Rice31_2d_cube_GIRG_converged.png}
+    % \label{fig:sub1}
   \end{subfigure}
 
   \vspace{1em}
   
-  \begin{subfigure}{0.9\textwidth}
+\end{figure}
+\begin{figure}
+  \begin{subfigure}{\textwidth}
     \centering
-    \includegraphics[width=\linewidth]{figures/Bowdoin47_2d_diffmaps}
-    \caption{Bowdoin47}
-    \label{fig:sub2}
+    \includegraphics[width=\linewidth]{figures/socfb-Bowdoin47_2ddiffmap_unif_vs_restrict.png}
+    % \label{fig:sub1}
   \end{subfigure}
 
   \vspace{1em}
-
-  \begin{subfigure}{0.9\textwidth}
+  \begin{subfigure}{\textwidth}
     \centering
-    \includegraphics[width=\linewidth]{figures/Simmons81_2d_diffmaps.png}
-    \caption{Simmons81}
-    \label{fig:sub3}
+    \includegraphics[width=\linewidth]{figures/socfb-Bowdoin47_2d_cube_GIRG_converged.png}
+    % \label{fig:sub1}
+  \end{subfigure}
+
+\end{figure}
+
+
+\begin{figure}
+  \begin{subfigure}{\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/socfb-Haverford76_2ddiffmap_unif_vs_restrict.png}
+    % \label{fig:sub1}
+  \end{subfigure}
+
+  \vspace{1em}
+  \begin{subfigure}{\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/socfb-Haverford76_2d_cube_GIRG_converged.png}
+    % \label{fig:sub1}
   \end{subfigure}
 
 
   \caption{two methods for rescaling/shifting diffusion maps into the cube - done here for d=2 truncations. The blue lines for the restricted version show the border at which points are outer uniformified.}
+  \label{fig:uniformifed_vs_restricted_rescaling}
+\end{figure}
+
+
+\begin{figure}
+  \begin{subfigure}{0.47\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/socfb-Rice31_2ddiffmap_restrict_scatter.png}
+    % \label{fig:sub1}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.47\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/socfb-Bowdoin47_2ddiffmap_restrict_scatter.png}
+    % \label{fig:sub1}
+  \end{subfigure}
+
+
+  \caption{the diffmaps (here 2d, restricted and outer uniformified) don't have much point clustering - it's more higher diffusion level than caring so much about individual edges like in the converged case}
   \label{fig:uniformifed_vs_restricted_rescaling}
 \end{figure}
 

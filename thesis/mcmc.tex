@@ -119,173 +119,192 @@ Our MCMC posterior is constrained by directly fitting $\hat{c}$ to produce a sim
 \end{equation}
 we can equivalently count $\frac{TP}{TP + FN}$ (Recall), the fraction of edges in the real graph that are successfully predicted, or $\frac{TP}{TP + FP}$ (Precision), the fraction of edges in the predicted graph that are also in the real graph, these numbers will be very similar. We call this metric "Percent Edges Captured" (PEC), and focus on this instead of the alternative "Percent Non-Edges Captured" (PNEC). PEC is preferrable as our graphs are all relatively sparse - hence the PNEC is always high as it is dominated by the large number of non-edges.
 
-
-The results of running the MCMC process is to achieve PEC of about??
-
-TODO rerun MCMC for larger graphs for longer. We didn't seem to be converging. I.e. it seems like we need a greater than linear iteration scaling to converge??
-
-\begin{tabular}{|l|c|c|r|}
-  \hline
-  real graph & PEC & PEC CL & Number iterations run \\
-  \hline
-  socfb-Caltech36-1d.pkl & 0.218726 & 0.057174 & 134400 \\
-  socfb-Reed98-1d.pkl & 0.172603 & 0.039337 & 173600 \\
-  socfb-Haverford76-1d.pkl & 0.210710 & 0.058752 & 257600 \\
-  socfb-Simmons81-1d.pkl & 0.168839 & 0.030439 & 268800 \\
-  socfb-Swarthmore42-1d.pkl & 0.181657 & 0.044276 & 296800 \\
-  socfb-Amherst41-1d.pkl & 0.181718 & 0.033742 & 403200 \\
-  socfb-Bowdoin47-1d.pkl & 0.132771 & 0.033619 & 403200 \\
-  socfb-Hamilton46-1d.pkl & 0.147926 & 0.036735 & 414400 \\
-  socfb-Trinity100-1d.pkl & 0.140800 & 0.033099 & 470400 \\
-  socfb-USFCA72-1d.pkl & 0.120164 & 0.017381 & 481600 \\
-  socfb-Williams40-1d.pkl & 0.127645 & 0.029190 & 498400 \\
-  socfb-Oberlin44-1d.pkl & 0.112043 & 0.020820 & 526400 \\
-  socfb-Smith60-1d.pkl & 0.088302 & 0.021486 & 532000 \\
-  \hline
-  \end{tabular}
+We see in \cref{fig:converged_pecs} that the converged cube GIRGs can achieve decent PECs. However as the number of nodes in the graph is increased, PEC decreases, e.g. going from about $30\%$ on small graphs of $2000$ nodes to $22\%$ on graphs around $10,000$ nodes, for just a 1d cube GIRG. Not surprisingly for any given graph, $d=3 > 2 > 1$ in terms of PEC performance.
 
 
-\subsection{point initalisation and failure rate}
-Initially I ran MCMC using uniformified diffusion map initialisation, and failure rate $0.0$. The MCMC would converge, but actually take longer than necessary, as the "good" initialisation was being undone in favour of quite spaced out points.
 
-The evidence for this is shown in some plots of points over time:
+% The results of running the MCMC process is to achieve PEC of about??
+
+% TODO rerun MCMC for larger graphs for longer. We didn't seem to be converging. I.e. it seems like we need a greater than linear iteration scaling to converge??
+
+% \begin{tabular}{|l|c|c|r|}
+%   \hline
+%   real graph & PEC & PEC CL & Number iterations run \\
+%   \hline
+%   socfb-Caltech36-1d.pkl & 0.218726 & 0.057174 & 134400 \\
+%   socfb-Reed98-1d.pkl & 0.172603 & 0.039337 & 173600 \\
+%   socfb-Haverford76-1d.pkl & 0.210710 & 0.058752 & 257600 \\
+%   socfb-Simmons81-1d.pkl & 0.168839 & 0.030439 & 268800 \\
+%   socfb-Swarthmore42-1d.pkl & 0.181657 & 0.044276 & 296800 \\
+%   socfb-Amherst41-1d.pkl & 0.181718 & 0.033742 & 403200 \\
+%   socfb-Bowdoin47-1d.pkl & 0.132771 & 0.033619 & 403200 \\
+%   socfb-Hamilton46-1d.pkl & 0.147926 & 0.036735 & 414400 \\
+%   socfb-Trinity100-1d.pkl & 0.140800 & 0.033099 & 470400 \\
+%   socfb-USFCA72-1d.pkl & 0.120164 & 0.017381 & 481600 \\
+%   socfb-Williams40-1d.pkl & 0.127645 & 0.029190 & 498400 \\
+%   socfb-Oberlin44-1d.pkl & 0.112043 & 0.020820 & 526400 \\
+%   socfb-Smith60-1d.pkl & 0.088302 & 0.021486 & 532000 \\
+%   \hline
+% \end{tabular}
+
 
 \begin{figure}
   \centering
-  \includegraphics[width=\textwidth]{figures/amherst_2d_pts_restricted.png}
-  \caption{0.05 quantile restricted and uniformed at the edges diffusion map initialisation of MCMC points for socfb-Amherst41}
+  \includegraphics[width=0.49\textwidth]{figures/mcmc_ordered_1d_pec_convergence.png}
+  \includegraphics[width=0.49\textwidth]{figures/mcmc_ordered_2d_pec_convergence.png}
+  \caption{PEC convergence over iterations for some example graphs.}
 \end{figure}
 
-\begin{figure}
-
-  \begin{subfigure}{1.0\textwidth}
-  \centering
-  \includegraphics[width=\linewidth]{figures/amherst_failure_mcmc_pts.png}
-  \caption{failure rate $0.3$}
-\end{subfigure}
-
-  \vspace{1em}
-
-  \begin{subfigure}{1.0\textwidth}
-  \centering
-  \includegraphics[width=\linewidth]{figures/amherst_nonfailure_mcmc_pts.png}
-  \caption{failure rate $0.0$ (aka no failure rate)}
-\end{subfigure}
-
-  \caption{MCMC iterated points scatter plot against initialisation, with/without failure rate}
-  \label{fig:amherst_points_over_time}
-\end{figure}
-
-
-Run long enough, the MCMC's points converge to the cube:
 
 \begin{figure}
   \centering
-  \includegraphics[width=\textwidth]{figures/MCMC_converged_to_cube.png}
-  \caption{failure rate $0.0$ run until convergence for 2D GIRG: points 2D histogram}
+  \includegraphics[width=\textwidth]{figures/mcmc_ordered_final_pec.png}
+  \caption{converged PECs for 1d, 2d, 3d cube GIRGs. Missing some 3d numbers
+  as batch job exceeded allotted time.}
+  \label{fig:converged_pecs}
 \end{figure}
 
+% \subsection{point initalisation and failure rate}
+% Initially I ran MCMC using uniformified diffusion map initialisation, and failure rate $0.0$. The MCMC would converge, but actually take longer than necessary, as the "good" initialisation was being undone in favour of quite spaced out points.
 
-\begin{table}[ht]
-  \centering
-  \begin{tabular}{|l|l|}
-  \hline
-  \textbf{LL maximum for 1D} & \textbf{LL maximum for 2D} \\
-  \hline
-  socfb-Amherst41 & socfb-Bowdoin47 \\
-  socfb-Oberlin44 & socfb-Caltech36 \\
-  socfb-Reed98 & socfb-Colgate88 \\
-  socfb-Swarthmore42 & socfb-Hamilton46 \\
-  socfb-Wellesley22 & socfb-Haverford76 \\
-  & socfb-Middlebury45 \\
-  & socfb-Pepperdine86 \\
-  & socfb-Santa74 \\
-  & socfb-Simmons81 \\
-  & socfb-Smith60 \\
-  & socfb-Trinity100 \\
-  & socfb-USFCA72 \\
-  & socfb-Vassar85 \\
-  & socfb-Williams40 \\
-  \hline
-  \end{tabular}
-  \caption{Your Caption}
-  \label{tab:my_label}
-  \end{table}
+% The evidence for this is shown in some plots of points over time:
+
+% \begin{figure}
+%   \centering
+%   \includegraphics[width=\textwidth]{figures/amherst_2d_pts_restricted.png}
+%   \caption{0.05 quantile restricted and uniformed at the edges diffusion map initialisation of MCMC points for socfb-Amherst41}
+% \end{figure}
+
+% \begin{figure}
+
+%   \begin{subfigure}{1.0\textwidth}
+%   \centering
+%   \includegraphics[width=\linewidth]{figures/amherst_failure_mcmc_pts.png}
+%   \caption{failure rate $0.3$}
+% \end{subfigure}
+
+%   \vspace{1em}
+
+%   \begin{subfigure}{1.0\textwidth}
+%   \centering
+%   \includegraphics[width=\linewidth]{figures/amherst_nonfailure_mcmc_pts.png}
+%   \caption{failure rate $0.0$ (aka no failure rate)}
+% \end{subfigure}
+
+%   \caption{MCMC iterated points scatter plot against initialisation, with/without failure rate}
+%   \label{fig:amherst_points_over_time}
+% \end{figure}
+
+
+% Run long enough, the MCMC's points converge to the cube:
+
+% \begin{figure}
+%   \centering
+%   \includegraphics[width=\textwidth]{figures/MCMC_converged_to_cube.png}
+%   \caption{failure rate $0.0$ run until convergence for 2D GIRG: points 2D histogram}
+% \end{figure}
+
+
+% \begin{table}[ht]
+%   \centering
+%   \begin{tabular}{|l|l|}
+%   \hline
+%   \textbf{LL maximum for 1D} & \textbf{LL maximum for 2D} \\
+%   \hline
+%   socfb-Amherst41 & socfb-Bowdoin47 \\
+%   socfb-Oberlin44 & socfb-Caltech36 \\
+%   socfb-Reed98 & socfb-Colgate88 \\
+%   socfb-Swarthmore42 & socfb-Hamilton46 \\
+%   socfb-Wellesley22 & socfb-Haverford76 \\
+%   & socfb-Middlebury45 \\
+%   & socfb-Pepperdine86 \\
+%   & socfb-Santa74 \\
+%   & socfb-Simmons81 \\
+%   & socfb-Smith60 \\
+%   & socfb-Trinity100 \\
+%   & socfb-USFCA72 \\
+%   & socfb-Vassar85 \\
+%   & socfb-Williams40 \\
+%   \hline
+%   \end{tabular}
+%   \caption{Your Caption}
+%   \label{tab:my_label}
+%   \end{table}
 
 
 
 
-  \begin{figure}
-    \centering
+%   \begin{figure}
+%     \centering
 
-    \begin{subfigure}{0.49\textwidth}
-      \centering
-      \includegraphics[width=\linewidth]{figures/MCMC_plots/socfb-Amherst41-1d.png}
-      \caption{Amherst41 $d=1$}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}{0.49\textwidth}
-      \centering
-      \includegraphics[width=\linewidth]{figures/MCMC_plots/socfb-Amherst41-2d.png}
-      \caption{Amherst41 $d=2$}
-    \end{subfigure}
+%     \begin{subfigure}{0.49\textwidth}
+%       \centering
+%       \includegraphics[width=\linewidth]{figures/MCMC_plots/socfb-Amherst41-1d.png}
+%       \caption{Amherst41 $d=1$}
+%     \end{subfigure}
+%     \hfill
+%     \begin{subfigure}{0.49\textwidth}
+%       \centering
+%       \includegraphics[width=\linewidth]{figures/MCMC_plots/socfb-Amherst41-2d.png}
+%       \caption{Amherst41 $d=2$}
+%     \end{subfigure}
   
-    \vspace{1em}
+%     \vspace{1em}
 
-    \begin{subfigure}{0.49\textwidth}
-      \centering
-      \includegraphics[width=\linewidth]{figures/MCMC_plots/socfb-Trinity100-1d.png}
-      \caption{Trinity100 $d=1$}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}{0.49\textwidth}
-      \centering
-      \includegraphics[width=\linewidth]{figures/MCMC_plots/socfb-Trinity100-2d.png}
-      \caption{Trinity100 $d=2$}
-    \end{subfigure}
+%     \begin{subfigure}{0.49\textwidth}
+%       \centering
+%       \includegraphics[width=\linewidth]{figures/MCMC_plots/socfb-Trinity100-1d.png}
+%       \caption{Trinity100 $d=1$}
+%     \end{subfigure}
+%     \hfill
+%     \begin{subfigure}{0.49\textwidth}
+%       \centering
+%       \includegraphics[width=\linewidth]{figures/MCMC_plots/socfb-Trinity100-2d.png}
+%       \caption{Trinity100 $d=2$}
+%     \end{subfigure}
   
-    \vspace{1em}
-    \begin{subfigure}{0.49\textwidth}
-      \centering
-      \includegraphics[width=\linewidth]{figures/MCMC_plots/socfb-Hamilton46-1d.png}
-      \caption{Hamilton46 $d=1$}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}{0.49\textwidth}
-      \centering
-      \includegraphics[width=\linewidth]{figures/MCMC_plots/socfb-Hamilton46-2d.png}
-      \caption{Hamilton46 $d=2$}
-    \end{subfigure}
+%     \vspace{1em}
+%     \begin{subfigure}{0.49\textwidth}
+%       \centering
+%       \includegraphics[width=\linewidth]{figures/MCMC_plots/socfb-Hamilton46-1d.png}
+%       \caption{Hamilton46 $d=1$}
+%     \end{subfigure}
+%     \hfill
+%     \begin{subfigure}{0.49\textwidth}
+%       \centering
+%       \includegraphics[width=\linewidth]{figures/MCMC_plots/socfb-Hamilton46-2d.png}
+%       \caption{Hamilton46 $d=2$}
+%     \end{subfigure}
   
-    % \vspace{1em}
-    % \begin{subfigure}{0.49\textwidth}
-    %   \centering
-    %   \includegraphics[width=\linewidth]{figures/MCMC_plots/socfb-Hamilton46-1d.png}
-    %   \caption{$d=1$}
-    % \end{subfigure}
-    % \hfill
-    % \begin{subfigure}{0.49\textwidth}
-    %   \centering
-    %   \includegraphics[width=\linewidth]{figures/MCMC_plots/socfb-Hamilton46-2d.png}
-    %   \caption{$d=2$}
-    % \end{subfigure}
+%     % \vspace{1em}
+%     % \begin{subfigure}{0.49\textwidth}
+%     %   \centering
+%     %   \includegraphics[width=\linewidth]{figures/MCMC_plots/socfb-Hamilton46-1d.png}
+%     %   \caption{$d=1$}
+%     % \end{subfigure}
+%     % \hfill
+%     % \begin{subfigure}{0.49\textwidth}
+%     %   \centering
+%     %   \includegraphics[width=\linewidth]{figures/MCMC_plots/socfb-Hamilton46-2d.png}
+%     %   \caption{$d=2$}
+%     % \end{subfigure}
   
-    % \vspace{1em}
-    % \begin{subfigure}{0.49\textwidth}
-    %   \centering
-    %   \includegraphics[width=\linewidth]{figures/MCMC_plots/socfb-Hamilton46-3d.png}
-    %   \caption{$d=1$}
-    % \end{subfigure}
-    % \hfill
-    % \begin{subfigure}{0.49\textwidth}
-    %   \centering
-    %   \includegraphics[width=\linewidth]{figures/MCMC_plots/socfb-Reed98-1d.png}
-    %   \caption{$d=2$}
-    % \end{subfigure}
+%     % \vspace{1em}
+%     % \begin{subfigure}{0.49\textwidth}
+%     %   \centering
+%     %   \includegraphics[width=\linewidth]{figures/MCMC_plots/socfb-Hamilton46-3d.png}
+%     %   \caption{$d=1$}
+%     % \end{subfigure}
+%     % \hfill
+%     % \begin{subfigure}{0.49\textwidth}
+%     %   \centering
+%     %   \includegraphics[width=\linewidth]{figures/MCMC_plots/socfb-Reed98-1d.png}
+%     %   \caption{$d=2$}
+%     % \end{subfigure}
   
-    % \vspace{1em}
+%     % \vspace{1em}
 
   
-    \caption{MCMC runs for socfb-Amherst41, sofcb-Trinity100, socfb-Hamilton46 with failure rate $0.3$ and ChungLu Mixin rate $0.5$ Log likelihood wise, Amherst 1D GIRG does best; for Bowdoin it's 2D GIRG}
-    \label{fig:amherst_non_failure_mcmc}
-\end{figure}
+%     \caption{MCMC runs for socfb-Amherst41, sofcb-Trinity100, socfb-Hamilton46 with failure rate $0.3$ and ChungLu Mixin rate $0.5$ Log likelihood wise, Amherst 1D GIRG does best; for Bowdoin it's 2D GIRG}
+%     \label{fig:amherst_non_failure_mcmc}
+% \end{figure}
