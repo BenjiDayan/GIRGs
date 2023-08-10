@@ -1,49 +1,64 @@
 \chapter{Generative Graph Models (GGM)}
+\label{chap:GGM}
+\minitoc
 
-\section{Generative Graph Models (GGM)}
-\cite{blasius2018towards} compares various generative graph models: Erdos-Renyi (ER), Barabasi-Albert (BA) preferential attachement graphs, Chung-Lu and hyperbolic graphs.
+\section{GGMs}
+\cite{blasius2018towards} compares various generative graph models: Erdos-Renyi (ER), Barabasi-Albert (BA) preferential attachement graphs, Chung-Lu and Hyperbolic Random graphs.
 They are compared on the basis of their ability to simulate real graphs of interest, such as social networks, citation networks, and biological networks, which are known to have power law node degree distributions.
 
 \subsection{GGM Mathematical outline}
-A graph $G = (V,E)$ is said to be randomly generated from a GGM $\cG$, written $G \sim \cG$. Most of our GGMs are simple and can be described by a small number of parameters. For example for the Erdos-Renyi GGM, $G \sim \cG_{ER}(n, p)$ means that $V=[n]$ and each $u \sim v$ iid with probability $p$.
+A graph $G = (V,E)$ is said to be randomly generated from a GGM $\cG$, written $G \sim \cG$. Most of our GGMs are simple and can be described by a small number of parameters. For example for the Erdos-Renyi GGM, $G \sim \cG_{ER}(n, p)$ means that there are $n$ nodes: $V=[n]$, and each potential edge $(u,v)$ exists iid with probability $p$. We write this as $P(u \sim v) = p$.
 
 \subsection{Fitting a GGM to a particular real graph instance}
-"Fitting" a GGM to a real graph $G$ means finding the most plausible $\hat{\theta}$ in the hypothetical world where $G$ was produced via $G \sim \cG(\hat{\theta})$. Hence for our ER GGM example, choosing $\hat{n} = |V|$ is a no-brainer, and likewise $\hat{p} = |E| / \binom{n}{2}$.
+\label{sec:fitting_GGM}
+"Fitting" a GGM to a real graph $G$ means finding the most plausible $\hat{\theta}$ in the hypothetical world where $G$ was produced via $G \sim \cG(\hat{\theta})$. Hence for our ER GGM example, choosing $\hat{n} = |V|$ is a no-brainer, and $\hat{p} = |E| / \binom{n}{2}$ follows by fitting the expected number of edges.
 
-Fitting $\hat{\theta}$ could be done by likelihood estimation. This is tractable for the Erdos-Renyi GGM for instance, by solving $\argmin_p \sum_{u \neq v} \log(p^{e_{uv}}) + \log((1-p)^{1 - e_{uv}}))$. For GIRGs however, this would be intractable. For example, trying to calculate $p(G | \alpha, \vec{w}, d) = \int_{\vec{x} \in [0,1]^d} p(G | \alpha, \vec{w}, \vec{x}) p(\vec{x})$ is not feasible.
+Fitting $\hat{\theta}$ can also be done by likelihood estimation. This is tractable for the Erdos-Renyi GGM for instance, by solving $\argmin_p \sum_{u \neq v} \log(p^{e_{uv}}) + \log((1-p)^{1 - e_{uv}}))$, which gives the same $\hat{p}$ as above. For GIRGs however, this would be intractable (full definition to come in \cref{sec:GIRG_def}): for example we cannot even easily integrate over all possible point locations in the geometric space:
 
-Instead we can use a heuristic method based on Approximate Bayesian Computation. We seek the parameter $\hat{\theta}$ that minimises the expected distance $ \E[d(G, G' \sim \cG(\theta))]$ for some distance metric $d$. For $d$ to be effective, ideally it would be something like $(f(G) - f(G'))^2$, perhaps ideally for $f$ a sufficient statistic of $\theta$.
+\begin{equation*}
+    p(G | \alpha, \vec{w}, d) = \int_{\vec{x}_1 \in [0,1]^d} \cdots \int_{\vec{x}_n \in [0,1]^d} p(G | \alpha, (\vec{x}_i)_{i=1}^n) \Pi_{i=1}^n p(\vec{x}_i)
+\end{equation*}
+
+Instead we can use a heuristic method based on Approximate Bayesian Computation (ABC). We seek the parameter $\hat{\theta}$ that minimises the expected distance $ \E[d(G, G' \sim \cG(\theta))]$ for some distance metric $d$. For $d$ to be effective, ideally it would be something like $(f(G) - f(G'))^2$, for $f$ a sufficient statistic of $\theta$. In practice this looks like an algorithm where we repeatedly sample $\theta$ from a prior; use it to generate $G'$; see if $f(G') \approxeq f(G)$, and if so keep $\theta$ as a candidate for $\hat{\theta}$.
 
 \subsection{Plausibility of Fitted GGMs}
 
-Similarly to the use of a statistic $f$ as a proxy for fitting $\hat{\theta}$, we can use other statistics $f'$ to evaluate the plausibility of a fitted GGM. Which statistic(s) $f$ should be used for ABC fitting, and which for plausibility analysis is unclear to me.
+Similarly to the use of a statistic $f$ of real and generated graphs as a proxy for fitting $\hat{\theta}$, we can also use other high level statistics $\fclass$ to evaluate the plausibility of a fitted GGM as to whether it could have produced the real graph $G$.
 
-Once a GGM is fit, we can then produce more graphs from it, via $G' \sim \cG(\hat{\theta})$. Clearly in general $G$ and $G'$ will be quite different due to the inherent randomness of the GGM. If G really had been produced by $\cG(\hat{\theta})$ though, we might expect $G$ and $G'$ to have relatively similar statistics, e.g. $\E[|E'|] = \hat{p} \binom{n}{2}$ with some small variance.
+Having fit $\hat{\theta}$ of the GGM, we can then sample graphs $G' \sim \cG(\hat{\theta})$ which are hypothetically similar to $G$. We can only hope for similarity on the global level, as even in the best case scenario where both $G, G' \sim \cG(\hat{\theta})$, due to the inherent randomness of the GGM, we cannot expect individual edges to matchup e.g. $e \in E \iff e \in E'$, let alone to be able to identify nodes in $G$ with those in $G'$ - see \cref{chap:graph_kernels} for more on graph similarity.
 
-Furthermore if we were to generate a whole list of graphs $G_1, \dots, G_k$ from $\cG(\hat{\theta})$, we would expect $G$ not to in any way stand out from the crowd.
+For example in the Erdos-Renyi exact fit case, in the best case scenario we have $G \sim \cG_{ER}(n, p^*)$ and $G' \sim \cG_{ER}(n, \hat{p} = p^* + \epsilon)$. Although there will be some small estimation error $\epsilon$ in the fit parameter, we've explicitly fit for the high level statistic of the number of edges, s.t. $|E| = \E[|E'|] = \hat{p} \binom{n}{2}$, and $|E'| \approxeq |E|$ with some small variance. For other (not fit) high level statistics $\fclass$ like the effective diameter of the graph, their expected value will close to that of the real graph, $E_{G' \sim \cG(\hat{\theta})}[\fclass(G')] \approxeq \fclass(G)$, and likewise concentrated with small variance s.t. $\fclass(G') \approxeq \fclass(G)$.
 
-In fact, in the best case, actually $G \sim \cG(\theta^*)$, so our parameter estimate is $\hat{\theta} = \theta^* + \epsilon$. Here $\epsilon$ is a random noise in our ability to fit $\theta$, hopefully small and with mean zero. 
 
-Then for any statistic $f$, we could consider the randomness $f(G) \sim F_1$, and $f(G') \sim F_2$. Due to the $\epsilon$ error in $\theta$ estimation, $F_2| \hat{\theta}(G) \nsim F_1$, but we would hope that $f(G)$ would still be reasonably within distribution, and less strongly (???) that $F_2 \sim \approxeq F_1$ not too far off, rather likely a higher variance but otherwise similar distribution.
+Furthermore if we were to generate a whole list of graphs $G'_1, \dots, G'_m$ from $\cG(\hat{\theta})$, assuming the matching GGM hypothesis, we would not expect $G$ to stand out from the crowd. Essentially $\fclass(G'(G)) \sim \fclass$ should follow a distribution with $\fclass(G)$ close to its median/mean.
 
-% To give a concrete example, say that $F|\theta \sim N(\theta, 1)$, and that $\theta^* = 0$. Then $F_1 \sim N(0, 1)$, and $F_2 | \epsilon  \sim N(\epsilon, 1)$. Assume perverseley that $F_1 | \epsilon \sim N(-\epsilon, 1)$, although perhaps something like $N(\epsilon / 2, 1)$ is more likely. 
+% In fact, in the best case, actually $G \sim \cG(\theta^*)$, so our parameter estimate is $\hat{\theta} = \theta^* + \epsilon$. Here $\epsilon$ is a random noise in our ability to fit $\theta$, hopefully small and with mean zero. 
 
-Hence plausibly sampling $G_1, ..., G_k \sim \cG(\theta^*)$, fitting $\hat{\theta}_i(G_i)$ and further sampling $G_i' \sim \cG(\theta^*)$, we expect that $f_i \sim F_1$ would be hard to separate from $f_i' \sim F_2$ with a classifier.
+% Then for any statistic $f$, we could consider the randomness $f(G) \sim F_1$, and $f(G') \sim F_2$. Due to the $\epsilon$ error in $\theta$ estimation, $F_2| \hat{\theta}(G) \nsim F_1$, but we would hope that $f(G)$ would still be reasonably within distribution, and less strongly (???) that $F_2 \sim \approxeq F_1$ not too far off, rather likely a higher variance but otherwise similar distribution.
+
+% % To give a concrete example, say that $F|\theta \sim N(\theta, 1)$, and that $\theta^* = 0$. Then $F_1 \sim N(0, 1)$, and $F_2 | \epsilon  \sim N(\epsilon, 1)$. Assume perverseley that $F_1 | \epsilon \sim N(-\epsilon, 1)$, although perhaps something like $N(\epsilon / 2, 1)$ is more likely. 
+
+% Hence plausibly sampling $G_1, ..., G_k \sim \cG(\theta^*)$, fitting $\hat{\theta}_i(G_i)$ and further sampling $G_i' \sim \cG(\theta^*)$, we expect that $f_i \sim F_1$ would be hard to separate from $f_i' \sim F_2$ with a classifier.
 
 
 
 
 % $p(\alpha | G, \vec{w}) = \int_{\vec{x}}  \frac{p(G | \alpha, \vec{w}, \vec{w}) p(\alpha)
 \subsection{Fitted GGMs as candidates for real graphs - Blasius}
-\cite{blasius2018towards} takes this method one step further. They are essentially evaluating the hypothesis that the set of real graphs $G_1, ..., G_k$ are generated from a particular GGM $\cG$, but with differing parameters: $G_1 \sim \cG(\theta^*_1), ..., G_k \sim \cG(\theta^*_k)$. 
+\label{sec:ggm_blasius_framework}
+\cite{blasius2018towards} takes this method one step further. They are essentially evaluating the hypothesis that the set of real graphs $G_1, ..., G_k$ are generated from a particular GGM $\cG$, but with differing parameters: $G_1 \sim \cG(\theta^*_1), ..., G_k \sim \cG(\theta^*_k)$. Perhaps $\theta^*_i$ come from some prior distribution $p(\theta)$.
 
-They again fit individual $\cG(\hat{\theta}_i)$ with which to generate one $G'_i$ per real graph $G_i$. This way instead of, for each real graph, comparing multiple $G'_{ij}$ to $G_i$ and averaging, they can compare the set of graphs $\{G_i\}_{i=1}^k$ to $\{G'_i\}_{i=1}^k$. Graph comparison is again done by comparing a wide number of statistics/metrics compted for each graph. These "features" include measures such as the number of nodes, average node degree, centrality, closeness, diameter, clustering coefficient and so on.
+They again fit individual $\hat{\theta}_i$ with which to generate one $G'_i \sim \cG(\hat{\theta}_i)$ per real graph $G_i$. This way instead of, for each real graph, comparing multiple $G'_{ij}$ to $G_i$ and averaging, they can compare the set of graphs $\{G_i\}_{i=1}^k$ to $\{G'_i\}_{i=1}^k$. Graph comparison is done by comparing a wide number of statistics/metrics computed for each graph. These are input as a whole feature vector $\vec{\fclass}(G)$ to an SVM classifier, which is trained to classify membership of the real or generated dataset. These features are statistics such as the number of nodes, average node degree, centrality, closeness, diameter, clustering coefficient and so on.
 
-(QUESTION: why not make multiple $G'_{ij}$ per real graph $G_i$? I.e. just doing the previous section for each real Graph? Presumably to reduce computation?)
+Aggregating the classification over the whole dataset of real graphs allows a
+
+We suggested in the previous section that multiple $G'_{ij}$ could be generated per real graph $G_i$ - this would reduce the variance of the whole process. This is also necessary to be able to train a classifier on an individual real graph basis, as you cannot do binary classification on just a pair of feature vectors $\vec{\fclass}(G_i)$ and $\vec{\fclass}(G'_i)$. Blasius instead aggregates the classification over the whole dataset of real graphs, allowing sufficient datapoints to train a classifier while reducing the overall necessary computation ($k$ generated graphs produced instead of $km$).
+
+This also has the added benefit of helping to cover for GGM parameter fitting inaccuracy. If $\hat{\theta}_i = \theta^*_i + \epsilon_i$, it may still be possible to distinguish $G_i$ from $\{G'_{ij}\}_{i=1}^m$ due to the $\epsilon_i$ fitting error. If instead we compare the set $\{\theta^*_i\}_{i=1}^k$ to $\{\hat{\theta}_i\}_{i=1}^k$, Now each $\hat{\theta}_i \neq \theta^*_i$, but still well fits into the distribution of $\{\theta^*_i\}_{i=1}^k \sim p(\theta)$. Finally having one $G'_i$ per real graph $G_i$ also simplifies the binary classification task by having a balanced dataset.
+
+% This gives us a mirrored real/fake graph features dataset: $\{\vec{\fclass}_i (G)  = \vec{\fclass}(G_i)$ for feature vector function $\vec{\fclass}$, against $\vec{\fclass}_i$.
+For the SVM classifier trained on the mirrored real/fake graph dataset, it will have close to 50\% accuracy if really $G_i \sim \cG(\theta^*_i)$, and higher accuracy if instead $G_i \sim \tilde{\cG}(\phi^*_i)$ some alternative GGM $\tilde{\cG}$.
 
 
-This gives us a mirrored real/fake graph features dataset: $\vec{f}_i = f(G_i)$ for feature vector function $\vec{f}$, against $\vec{f}'_i$. A classifier is trained on this dataset, to classify a given graph as real/fake. This classifier will have close to 50\% accuracy if really $G_i \sim \cG(\theta^*_i)$, and higher accuracy if instead $G_i \sim \tilde{\cG}(\phi^*_i)$ some alternative GGM $\tilde{\cG}$.
-
-
-Contextually, GIRGs are compared with other generative graph models: Erdos-Renyi (ER), Barabasi-Albert (BA) preferential attachement graphs, Chung-Lu and hyperbolic graphs.
-In \cite{blasius2022efficiently}
+% Contextually, GIRGs are compared with other generative graph models: Erdos-Renyi (ER), Barabasi-Albert (BA) preferential attachement graphs, Chung-Lu and hyperbolic graphs.
+% In \cite{blasius2022efficiently}

@@ -1,4 +1,6 @@
 \chapter{Graph Kernels}
+\label{chap:graph_kernels}
+\minitoc
 
 \section{Bayes Factor}
 A bayesian approach to model selection is to compare $p(M_1 | D)$ and $p(M_2 | D)$. $M_1, M_2$ are possible models of the data, e.g. $M_1 = \cG_{1D\; \GIRG}$ and $M_2 = \cG_{CL}$. $D$ is a single graph instance $G$, or alternatively a whole dataset of our 100 facebook graphs, assuming that they all come from the same generative model family. We have some prior of $p(M_1)$ vs $p(M_2)$, e.g. $50 : 50$, or for the possible different dimensional GIRGS some kind of decaying $p(1D\; \GIRG) > p(2D\; \GIRG) > p(3D\; \GIRG) > \dots$.
@@ -25,7 +27,7 @@ The simplified notation is dropping the $| M_1$ as we've fix into some dimension
 
 There's a problem here. Our data is a graph $D=G$. In the computation we actually need to inspect $p(G | \theta) = \sum_{\sigma} p(G' \stackrel{\sigma}{\cong} G | \theta) p(\sigma)$. Here $\sigma$ is a permutation of the node IDs. This is a confusing concept for sure. This is an abuse of notation - normally $p(G | \theta)$ is not a sum over permutations, but rather the probability of generating this exact graph. This will have to be contextually apparent.
 
-Hence our simple MonteCarlo computation of $p(G | \theta, \GIRG) < p(G | CL)$ which was sad, is actually not quite valid. So Yay! We can still hope that the GIRG model is better than ChungLu, or at least bayesianly more likely.
+Hence our simple MonteCarlo computation of $p(G | \theta, \GIRG) < p(G | CL)$ which was sad, is actually not quite valid. So Yay! We can still hope that the GIRG model is better than Chung-Lu, or at least bayesianly more likely.
 
 To be concrete, let's say $G=(1,2), (2, 3), (2, 4), (2, 5)$. Then we say $G$ is isomorphic to $G'$ with permutation $\sigma= (1,4)$ ($G \stackrel{\sigma}{\to} G'$) where $G' = (4, 2), (2, 3), (2, 1), (2, 5)$. So the compuation is actually sample $\theta$,  then for each $\sigma \in S_n$ create $G'$ where $G$ is isomorphic to $G'$ with permutation $sigma$ ($G \stackrel{\sigma}{\to} G'$), and calculate $p(G' | \theta)$. Add these up and take the average.
 Finally repeat for more different $\theta$ samples and take an outer average.
@@ -172,7 +174,7 @@ Unfortunately both kernels failed to pass a basic test of ratifying one type of 
 \begin{figure}
   \centering
 \includegraphics[width=0.8\linewidth]{figures/d=2 alpha=1.2 n=70000 GIRG WL-Kernel with others.png}
-\caption{WL-Kernel of a d=2, alpha=1.2, n=70000 Torus GIRG with other generated graphs (13 per model). All the GIRGs are more similar to the original than ChungLu, but we cannot differentiate between different GIRGs.}
+\caption{WL-Kernel of a d=2, alpha=1.2, n=70000 Torus GIRG with other generated graphs (13 per model). All the GIRGs are more similar to the original than Chung-Lu, but we cannot differentiate between different GIRGs.}
 \label{fig:wl_kernel_gentorus}
 \end{figure}
 
@@ -182,7 +184,7 @@ socfb-Brandeis99 d=3.png
 \begin{figure}
   \centering
 \includegraphics[width=0.8\linewidth]{figures/socfb-Brandeis99 d=3.png}
-\caption{RW-Kernel of a d=3 copy weight cube GIRG fit to socfb-Brandeis99 (matching number of edges and local clustering coefficient), with other generated graphs (6 per model type). ChungLu graphs have highest similarity to the original, despite it being a 3D GIRG}
+\caption{RW-Kernel of a d=3 copy weight cube GIRG fit to socfb-Brandeis99 (matching number of edges and local clustering coefficient), with other generated graphs (6 per model type). Chung-Lu graphs have highest similarity to the original, despite it being a 3D GIRG}
 \label{fig:rw_kernel_fitcopycube}
 \end{figure}
 

@@ -1,8 +1,9 @@
 \chapter{MCMC}
+\minitoc
 \section{Introduction}
-The binary classification framework is designed to compare the similarity of two distributions of datapoints. Each graph is a datapoint, and the classifier compares graphs only on higher level features meant to distinguish distributions of graphs, not individual graphs. In particuular these features are node permutation invariant - such as average degree, effective diameter and so on.
+Previous sections' GGM comparison framework by binary classification was designed to compare the similarity of two distributions of graphs based on higher level features. These features like mean/median/stdev node degree / node closeness centrality, or effective diameter etc. are node permutation invariant.
 
-An alternative framework is to try to fit a GGM model to a graph so as to compare on an edgewise and likelihood basis. For for the GIRG GGM, this means not just fitting $\hat{\alpha}$ to match the local clustering coefficient, $\hat{c}$ to match the number of edges, and $\hat{\tau}$ to match the degree distribution tail, but to further actually try and infer individual node weights $w_u$, and positions $x_u$. 
+An alternative framework is to try to fit a GGM model to a graph so as to compare on an edgewise and likelihood basis. For the GIRG GGM, this means not just fitting $\hat{\alpha}$ to match the local clustering coefficient, $\hat{c}$ to match the number of edges, and $\hat{\tau}$ to match the degree distribution tail, but to further actually try and infer individual node weights $w_u \in \R^+$, and positions $\vec{x}_u \in \chi$. 
 
 We saw this already to some extent with the copy-weight GIRGs - where $\hat{w}_u = d_u$ is fit, as the observed real graph node degrees. The $x_u$ are much harder to fit - for a start any maximum likelihood fit $\hat{x}_u$ would be rotation, reflection, and translation invariant (isometries). Finding any one maximum likelihood fit is impractical for all but the smallest graphs. Instead we try a Markov-Chain MonteCarlo (MCMC) approach to sample a set of locations $\{x_u\}$ from the posterior distribution.
 
@@ -32,8 +33,8 @@ The proposal distribution should be designed to maximise chances of acceptance. 
 \section{Bayes Factor likelihood comparisons}
 \begin{enumerate}
     \item Using one MCMC posterior sample of $\{x_u\}_{u \in V}$ and maximum likelihood estimates $\hat{\alpha}, \hat{c}, \hat{w}_u$, we estimate the likelihood $p(\cG_{\GIRG} | G)$, and can perform a comaprison $p(\cG_{\GIRG-1d} | G)$ vs $p(\cG_{\GIRG}-2d | G)$ vs $p(\cG_{CL} | G)$ etc.
-    \item Results show that $p(\cG_{\GIRG}-1d | G)$ is better than 2D, 3D GIRGs, but not as good as Chunglu
-    \item Results show that simply introducing a failure rate of $0.5$ onto the GIRGs (unfortunately not correcting for LCC), the model probabiltiy estimate for 1D GIRG then beats out chunglu (all copyweights)
+    \item Results show that $p(\cG_{\GIRG}-1d | G)$ is better than 2D, 3D GIRGs, but not as good as Chung-Lu
+    \item Results show that simply introducing a failure rate of $0.5$ onto the GIRGs (unfortunately not correcting for LCC), the model probabiltiy estimate for 1D GIRG then beats out Chung-Lu (all copyweights)
 \end{enumerate}
 
 
@@ -74,11 +75,11 @@ TODO think through more penalisation of models by parameter count. Does this $P(
 
 \section{Model Comparison}
 
-We seek to show that the GIRG model does a better job at fitting the facebook graphs than the ChungLu model, which is the natural comparison point as essentially a GIRG without geometry. We would also like to determine between 1D, 2D etc. GIRGs what is the best dimensionality.
+We seek to show that the GIRG model does a better job at fitting the facebook graphs than the Chung-Lu model, which is the natural comparison point as essentially a GIRG without geometry. We would also like to determine between 1D, 2D etc. GIRGs what is the best dimensionality.
 
 \subsection{Likelihood comparison of GIRG vs CL fit to real graph}
 As a first sanity check, we can sample a $\hat{\theta}_{\GIRG}$ (not MLE but still pretty good) as from the posterior $\theta_{\GIRG} | G$ with MCMC, and more simply fit a $\hat{\theta}_{CL}$. Given that the 1D GIRG is a more parametrised model, it would be total failure if it didn't reproduce the given graph better. For most of the facebook graphs however, $p(G | \hat{\theta}_{\GIRG}, \cG_{\GIRG}) < p(G | \hat{\theta}_{CL}, \cG_{CL})$!
-The GIRG model is far too confident about edges, giving $p_{uv} \approxeq 1$ for small $\norm{x_u - x_v}$ and $p_{uv} \approxeq 0$ for large $\norm{x_u - x_v}$. Hence a mistake on a few edges can lead to a large penalisation in likelihood. The ChungLu model is much more forgiving, with all probabilities more medium sized. 
+The GIRG model is far too confident about edges, giving $p_{uv} \approxeq 1$ for small $\norm{x_u - x_v}$ and $p_{uv} \approxeq 0$ for large $\norm{x_u - x_v}$. Hence a mistake on a few edges can lead to a large penalisation in likelihood. The Chung-Lu model is much more forgiving, with all probabilities more medium sized. 
 
 One reasonable tweak is to introduce a failure rate $0 \leq f \leq 1$ to the GIRG model: 
 % $p_{uv} = (1-f) \min( ... )$
@@ -92,16 +93,16 @@ One reasonable tweak is to introduce a failure rate $0 \leq f \leq 1$ to the GIR
 \end{equation}
 For a social network this means that two highly similar people are not guaranteed/forced to be friends. Indeed there may be a very like-minded person who lives next door to you that you've never met, or had no opportunity / free time to properly get to know.
 
-A failure rate will lower the impact of short non-edges (mistakenly predicted high probability of edge), but for long edges (mistakenly predicted low probablity of edge) we need a baseline edge probability to prevent $p_{uv}$ being too small. A simple fix is to mixin the ChungLu model - i.e. let 
+A failure rate will lower the impact of short non-edges (mistakenly predicted high probability of edge), but for long edges (mistakenly predicted low probablity of edge) we need a baseline edge probability to prevent $p_{uv}$ being too small. A simple fix is to mixin the Chung-Lu model - i.e. let 
 \begin{equation}
   p_{uv} = \eta \; p_{uv}^{CL} + (1 - \eta) \; p_{uv}^{GIRG}
 \end{equation}
-for $0 \leq \eta \leq 1$. This should not be seen strictly as an ensemble of models or gross addition to the number of parameters of the GIRG model, as the GIRG model already contains fit node weights $(\hat{w}_u)_{u \in V}$. The mixin parameter $\eta$ does also help a lot on short non-edges similarly to failure rate $f$, but it could still be good to have both as even the ChungLu model can demand an edge $u \sim v$ with high probability if $w_u, w_v$ are both very large - though this is very rare.
+for $0 \leq \eta \leq 1$. This should not be seen strictly as an ensemble of models or gross addition to the number of parameters of the GIRG model, as the GIRG model already contains fit node weights $(\hat{w}_u)_{u \in V}$. The mixin parameter $\eta$ does also help a lot on short non-edges similarly to failure rate $f$, but it could still be good to have both as even the Chung-Lu model can demand an edge $u \sim v$ with high probability if $w_u, w_v$ are both very large - though this is very rare.
 
-The intuitive social network interpretation of ChungLu mixin is that it allows for some "random" friendships.
+The intuitive social network interpretation of Chung-Lu mixin is that it allows for some "random" friendships.
 
 
-With these two new parameters $f, \eta$, the augmented GIRG model does have a higher specific fit likelihood than the ChungLu model: $p(G | \hat{\theta}_{GIRG}, \cG_{GIRG}) > p(G | \hat{\theta}_{CL}, \cG_{CL})$. In a holistic MCMC setup these two parameters could also have a prior and be sampled from the posterior, but for simplicity we set them to $f=0.3, \eta=0.5$.
+With these two new parameters $f, \eta$, the augmented GIRG model does have a higher specific fit likelihood than the Chung-Lu model: $p(G | \hat{\theta}_{GIRG}, \cG_{GIRG}) > p(G | \hat{\theta}_{CL}, \cG_{CL})$. In a holistic MCMC setup these two parameters could also have a prior and be sampled from the posterior, but for simplicity we set them to $f=0.3, \eta=0.5$.
 
 
 \subsection{Percent Edges Captured Metric Comparison}
@@ -163,6 +164,11 @@ We see in \cref{fig:converged_pecs} that the converged cube GIRGs can achieve de
   as batch job exceeded allotted time.}
   \label{fig:converged_pecs}
 \end{figure}
+
+
+TODO further improvements might be: updating weight estimates (adding into ordered MCMC, as per mercator). Making code run on GPU.
+
+
 
 % \subsection{point initalisation and failure rate}
 % Initially I ran MCMC using uniformified diffusion map initialisation, and failure rate $0.0$. The MCMC would converge, but actually take longer than necessary, as the "good" initialisation was being undone in favour of quite spaced out points.
@@ -305,6 +311,6 @@ We see in \cref{fig:converged_pecs} that the converged cube GIRGs can achieve de
 %     % \vspace{1em}
 
   
-%     \caption{MCMC runs for socfb-Amherst41, sofcb-Trinity100, socfb-Hamilton46 with failure rate $0.3$ and ChungLu Mixin rate $0.5$ Log likelihood wise, Amherst 1D GIRG does best; for Bowdoin it's 2D GIRG}
+%     \caption{MCMC runs for socfb-Amherst41, sofcb-Trinity100, socfb-Hamilton46 with failure rate $0.3$ and Chung-Lu Mixin rate $0.5$ Log likelihood wise, Amherst 1D GIRG does best; for Bowdoin it's 2D GIRG}
 %     \label{fig:amherst_non_failure_mcmc}
 % \end{figure}

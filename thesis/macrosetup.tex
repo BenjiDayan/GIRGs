@@ -13,13 +13,17 @@
 \usepackage{bm}
 \usepackage{tikz}
 \usepackage{rotating}
+\usepackage{minitoc}
 
 
 
 % GIRGs
-\DeclareMathOperator{\GIRG}{GIRG}
+\newcommand{\GIRG}{\mathrm{GIRG}}
 \DeclareMathOperator{\shrinktogcc}{\textcolor{blue}{shrinkToGCC}}
 \newcommand{\PLP}{\mintinline{python}|powerlaw|\xspace}
+\newcommand{\ffit}{f_{\mathrm{fit}}}  % statistic with which to fit GGM parameter
+% statistic(s) with which to classify real/fake graphs
+\newcommand{\fclass}{f^{\mathrm{class}}}  
 
 
 %% Special characters for number sets, e.g. real or complex numbers.
