@@ -43,6 +43,7 @@
 \usepackage[amsmath,thmmarks]{ntheorem}
 
 %% LaTeX' own graphics handling
+\usepackage[dvipsnames]{xcolor}
 \usepackage{graphicx}
 
 %% We unfortunately need this for the Rules chapter.  Remove it
@@ -52,6 +53,8 @@
 %% This allows you to add .pdf files. It is used to add the
 %% declaration of originality.
 \usepackage{pdfpages}
+
+
 
 %% Some more packages that you may want to use.  Have a look at the
 %% file, and consult the package docs for each.
@@ -68,11 +71,16 @@
 %% Make document internal hyperlinks wherever possible. (TOC, references)
 %% This MUST be loaded after varioref, which is loaded in 'extrapackages'
 %% above.  We just load it last to be safe.
-\usepackage[linkcolor=black,colorlinks=true,citecolor=black,filecolor=black]{hyperref}
+% \usepackage[linkcolor=black,colorlinks=true,citecolor=black,filecolor=black]{hyperref}
+\usepackage[colorlinks=true,citecolor=black]{hyperref}
 
 
 %% Helpful macros.
 \input{macrosetup}
+
+%% benji: make subsubsection also count?
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
 
 %% Document information
 %% ====================
@@ -84,7 +92,39 @@
 \department{Department of Computer Science}
 \date{January 19, 2038}
 
+
+
+%% benji: make margins bigger hopefully?
+
+\setlrmarginsandblock{4.0cm}{3.0cm}{*}
+\setulmarginsandblock{3.0cm}{*}{1}
+\checkandfixthelayout 
+
+%% benji: fix strange bug?
+
+% \let\displaystyle\textstyle
+
+
+% \def\MT@set@inh@list#1#2{%
+%   \MT@ifempty\MT@inh@feat{%
+%     \MT@map@clist@c\MT@features{\begingroup % <--
+%       \MT@ifstreq{##1}{tr}\relax{\MT@declare@char@inh{##1}{#1}{#2}}%
+%     \endgroup}% <--
+%   }{%
+%     \MT@map@clist@c\MT@inh@feat{\begingroup % <--
+%       \KV@@sp@def\@tempa{##1}%
+%       \MT@ifempty\@tempa\relax{%
+%         \edef\@tempa{\csname MT@rbba@\@tempa\endcsname}%
+%         \MT@ifstreq\@tempa{tr}\relax{%
+%           \MT@exp@one@n\MT@declare@char@inh{\@tempa}{#1}{#2}}}%
+%     \endgroup}% <--
+%   }%      
+%   \MT@end@catcodes
+% }       
+
 \begin{document}
+
+\let\displaystyle\textstyle
 
 
 \frontmatter
@@ -109,12 +149,13 @@
 \mainmatter
 
 %% Your real content!
-\input{introduction}
-\input{rules}
-\input{typography}
+% \input{introduction}
+% \input{rules}
+% \input{typography}
+
+\input{GIRG_intro}
 
 \input{GGM_intro}
-\input{GIRG_intro}
 \input{diff_maps}
 \input{mcmc}
 

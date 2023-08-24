@@ -1,8 +1,7 @@
 %% Custom commands
 %% ===============
 
-\usepackage{xcolor}
-% \usepackage ????
+
 \usepackage{minted}
 \usepackage{xspace}
 \usepackage{cleveref}
@@ -14,6 +13,41 @@
 \usepackage{tikz}
 \usepackage{rotating}
 \usepackage{minitoc}
+\usepackage{etoolbox}
+
+% hopefully nice section coloring?
+\usepackage{titlesec}
+
+\titleformat{name=\section}[block]
+  {\sffamily\Large\bfseries}
+  {}
+  {0pt}
+  {\colorsectionblue}
+\titlespacing*{\section}{0pt}{\baselineskip}{\baselineskip}
+
+\titleformat{name=\subsection}[block]
+  {\sffamily\bfseries}
+  {}
+  {0pt}
+  {\colorsubsectiongreen}
+\titlespacing*{\subsection}{0pt}{\parskip}{0pt}
+
+\titleformat{name=\subsubsection}[block]
+  {\sffamily\bfseries}
+  {}
+  {0pt}
+  {\colorsubsubsectionred}
+\titlespacing*{\section}{0pt}{\baselineskip}{\baselineskip}
+
+\newcommand{\colorsectionblue}[1]{%
+  \colorbox{blue!20}{\parbox{\dimexpr\textwidth-2\fboxsep}{\color{black}\thesection\ #1}}}
+
+\newcommand{\colorsubsectiongreen}[1]{%
+  \colorbox{green!20}{\parbox{\dimexpr\textwidth-2\fboxsep}{\color{black}\thesubsection\ #1}}}
+
+
+\newcommand{\colorsubsubsectionred}[1]{%
+\colorbox{red!20}{\parbox{\dimexpr\textwidth-2\fboxsep}{\color{black}\thesubsubsection\ #1}}}
 
 
 
@@ -93,3 +127,52 @@
 %% Also set the alternate phi as default.
 % \let\oldphi\phi
 % \renewcommand{\phi}{\ensuremath{\varphi}}
+
+
+
+%% benji: try to color all math mode text
+% \renewcommand{\displaymath}{\color{red}\[}
+% \renewcommand{\enddisplaymath}{\]\@ignoretrue\color{black}}
+
+\definecolor{byzantium}{rgb}{0.44, 0.16, 0.39}
+\definecolor{darkred}{rgb}{0.55, 0.2, 0.0}
+\definecolor{electricyellow}{rgb}{1.0, 1.0, 0.0}
+\definecolor{amber}{rgb}{1.0, 0.75, 0.0}
+\definecolor{awesome}{rgb}{1.0, 0.13, 0.32}
+\definecolor{applegreen}{rgb}{0.5, 0.65, 0.0}
+
+\everymath{\color{darkred}}
+
+\AtBeginEnvironment{equation*}{\color{darkred}}
+\AtBeginEnvironment{align*}{\color{darkred}}
+\AtBeginEnvironment{equation}{\color{darkred}}
+\AtBeginEnvironment{align}{\color{darkred}}
+
+% \everydisplay\expandafter{\the\everydisplay \color{blue}}
+% my tables are now math colored??
+% unfortunately this fix then stops my align environments from working
+% \makeatletter
+% \def\m@th{\mathsurround\z@\color{black}}
+% \makeatother
+
+% Restore black color for tables
+% \AtBeginEnvironment{tabular}{\color{black}}
+% \AtBeginEnvironment{table}{\color{black}}
+
+% % Reset color after tables
+% \AtEndEnvironment{tabular}{\color{black}}
+% \AtEndEnvironment{table}{\color{black}}
+
+% my footnotes are now math colored too?
+% \makeatletter
+% \renewcommand\@makefnmark{\hbox{\@textsuperscript{\normalfont\color{red}\@thefnmark}}}
+% \makeatother
+\renewcommand\thefootnote{\textcolor{green}{\arabic{footnote}}}
+
+
+% make italics a different color
+\let\oldtextit\textit 
+\renewcommand\textit[1]{\oldtextit{\color{applegreen}#1}}
+
+% color links?
+\hypersetup{colorlinks,linkcolor=awesome}

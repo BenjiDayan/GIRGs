@@ -1,4 +1,5 @@
 \chapter{Likelihood Point Estimation}
+\label{chap:likelihood_point_estimation}
 \minitoc
 \section{Introduction}
 Diffusion Maps in \cref{chap:diff_maps} provide a good initial point estimate for fitting GIRG node locations to a real graph. The actual data likelihood, $p(G | \theta)$, however, is what we'd truly like to maximise. As in \cite{garcia2019mercator} we can use the likelihood to do a further refinement of point locations, although finding anything like a global optimum is infeasible for all but tiny graphs.
@@ -221,8 +222,7 @@ Not surprisingly for any given graph, $d=3 > 2 > 1$ in terms of PEC performance.
 
 TODO add in GIRG generated graphs final PEC vs Nodes plot.
 
-
-
+Note on the PEC plot: A simple model that might explain what's going on. Say that in the real graph it's 50\% GIRG like and 50\% random shit. So edge probabilities look like $0.5 p_1 + 0.5 p_2$, or roughly half edges are from $p_1$ (GIRG) and half edges are from $p_2$ (random). We fit a GIRG via $\hat{p}$ to observed edges. We're actually aiming at capturing 100\% of the edges, so our we have more prob mass than $0.5 p_1$, however let's say that $\hat{p}_1 = p_1 + \Delta p$. Then we fit roughly $0.5 * 0.8$ of GIRG edges and $\bar{d}/2n$ of the remaining edges. So e.g. $y = 0.5*0.8 + 0.5*60/x$. This is the simple model where GIRG edges are either $p_1 = 0$ or $p_1 = 0.8$.
 % The results of running the MCMC process is to achieve PEC of about??
 
 % TODO rerun MCMC for larger graphs for longer. We didn't seem to be converging. I.e. it seems like we need a greater than linear iteration scaling to converge??

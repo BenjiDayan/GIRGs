@@ -58,7 +58,7 @@ Notably the transition matrix satisfies $M\vec{1} = \vec{1}$ since $\sum_j \frac
 
 The diffusion map representation of a node is then
 \begin{align*}
-  & e_i^T M = \sum_{k=1}^n \phi_i(k) \lambda_k^t \vec{\psi}_k \quad & \text{diff map of node $i$ after $t$ steps}\\
+  & e_i^T M = \sum_{k=1}^n \phi_i(k) \lambda_k^t \vec{\psi}_k \quad & \text{diff map of node i after t steps}\\
   & i \mapsto (\phi_2(i) \lambda_2^t,... \phi_{d+1}(i) \lambda_{d+1}^t) = \vec{\varphi}_t(v_i) \quad & \text{d-trunc diff map representation}
   \\
   & D_t(v_i, v_j)^2 := \sum_k \frac{1}{d_k} (M^t_{ik} - M^t_{jk})^2
