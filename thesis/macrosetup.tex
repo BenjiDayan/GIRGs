@@ -18,6 +18,11 @@
 % hopefully nice section coloring?
 \usepackage{titlesec}
 
+% make minitoc tocdpeth match tocdepth
+% \setcounter{minitocdepth}{\value{tocdepth}}
+% \setcounter{minitocdepth}{subsubsection}
+\setcounter{minitocdepth}{3}
+
 \titleformat{name=\section}[block]
   {\sffamily\Large\bfseries}
   {}
@@ -50,10 +55,13 @@
 \colorbox{red!20}{\parbox{\dimexpr\textwidth-2\fboxsep}{\color{black}\thesubsubsection\ #1}}}
 
 
+\newcommand{\q}[1]{``#1''}
+
 
 % GIRGs
 \newcommand{\GIRG}{\mathrm{GIRG}}
 \DeclareMathOperator{\shrinktogcc}{\textcolor{blue}{shrinkToGCC}}
+\DeclareMathOperator{\uniformify}{\textcolor{blue}{uniformify}}
 \newcommand{\PLP}{\mintinline{python}|powerlaw|\xspace}
 \newcommand{\ffit}{f_{\mathrm{fit}}}  % statistic with which to fit GGM parameter
 % statistic(s) with which to classify real/fake graphs

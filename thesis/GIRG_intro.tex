@@ -4,7 +4,7 @@
 \section{Thesis Introduction}
 Networks / Graphs are a useful model to describe a group of interconnected entities, and is a common abstraction of real life systems. Real world graph data abound, but often bear similarities in their structure. Different graph generating models have been proposed with justifications of reasonable formative mechanisms and likeness to real graphs. Theoretical study of these models bring insights on the real networks, and have use in generating synthetic graphs for testing purposes. 
 
-\textit{Geometric Inhomogenous Random Graphs} (GIRGs) are one such graph generating model, first proposed in \cite{bringmann2016average} as a generalisation of  \textit{Hyperbolic Random Graphs}. They permit great flexibility on the geometric component of the generative structure and hence can better model a wider range of real graphs. Their definition embodies the intuitive sense present in many graphs that nodes are more likely to be connected if they are "close together". GIRGs also have an inhomogenity between nodes that results in a power law degree distribution, which is observed in many real graphs.
+\textit{Geometric Inhomogenous Random Graphs} (GIRGs) are one such graph generating model, first proposed in \cite{bringmann2016average} as a generalisation of  \textit{Hyperbolic Random Graphs}. They permit great flexibility on the geometric component of the generative structure and hence can better model a wider range of real graphs. Their definition embodies the intuitive sense present in many graphs that nodes are more likely to be connected if they are \q{close together}. GIRGs also have an inhomogenity between nodes that results in a power law degree distribution, which is observed in many real graphs.
 
 In this thesis we assess how well GIRGs can simulate a dataset of $104$ social network graphs downloaded from the \href{https://networkrepository.com/}{Network Repository} \cite{rossi2015network}. These graphs are all Facebook networks from various towns in the US, so are structurally similar, and range from $n=1000$ to $n=100,000$ nodes. In \cref{chap:GGM} we judge the mostly unmodified GIRG prior distribution of graphs on their high level similarities to the real graphs, and in \cref{chap:likelihood_point_estimation} a more intensive posterior style of fit GIRG in replicating real graphs on a node/edge level. 
 
@@ -18,17 +18,17 @@ We additionally try in \cref{chap:graph_kernels} to apply the method of \textit{
 
 % We additionally explore the use of Graph Kernels as an alternative framework to explicit sets of high level graph statistics, but fail to produce reasonable results.
 
-For the second task of GIRG posterior fitting we explore the method of diffusion maps in \cref{chap:diff_maps}, in addition to either a markov chain Monte Carlo or maximum likelihood method of fitting geometric locations of nodes in the graph in \cref{chap:likelihood_point_estimation}. We detail an empirical method using diffusion maps to find a reasonable dimension of GIRG. The full fitting procedure shows decent performance in replicating real graphs, and again supports the hypothesis that 1 dimension is mostly sufficient for this dataset of social networks.
+For the second task of GIRG posterior fitting, we seek to infer node geometric locations of a given posited GIRG generative model for an input real graph. The method of diffusion maps is explored in \cref{chap:diff_maps} as a means of estimating node locations, as well as the underlying geometric dimensionality. In \cref{chap:likelihood_point_estimation} we detail methods to further refine node locations using either a markov chain Monte Carlo or maximum likelihood based fitting approach. The full fitting procedure shows decent performance in replicating real graphs, and again supports the hypothesis that 1 dimension is mostly sufficient for this dataset of social networks.
 
 Supporting all objectives, we also cover the different types of GIRGs and their selling points, and show practical methods for sampling and working with them.
 
 
 
-\chapter{GIRGs - variants and generation}
+\chapter{GIRGs - Variants and Generation}
 \minitoc
 \section{GIRGs definition}
 \label{sec:GIRG_def}
-We outline the key elements of GIRGs and the main variations and how they fit into a wider context of random graph models.
+We outline the key elements of GIRGs, the main variant types of GIRG, and how they fit into the wider context of random graph models.
 
 The GIRG definition according to \cite{bringmann2019geometric} is a random graph model defined by the edge connection probabilities
 
@@ -100,9 +100,9 @@ $\alpha \in (1, \infty]$ is another parameter affecting the geometry. The edge p
 A key property of the GIRG model is that it's a geometic variant of the Chung-Lu model. The Chung-Lu model decrees edge probabilities between nodes for a given node weight sequence $(w_u)_{u \in V}$ as $p_{uv} = \Theta(\min\{1, \frac{w_u w_v}{W}\})$.
 
 
-In a GIRG, geometry influences edge proabilities, however when you consider any two nodes $u,v$, marginalising over all of their possible locations (where they're close by or far apart), you get $E_{x_v}[p_{uv} | x_u, w_u, w_v] = \Theta(\min\{1, \frac{w_u w_v}{W} \})$, precisely like Chung-Lu just forgetting node locations $(\vec{x}_u)_{u \in V}$.
+In a GIRG, geometry influences edge proabilities, however when you consider any two nodes $u,v$, marginalising over all of their possible locations (whether they're close by or far apart), you get $E_{x_v}[p_{uv} | x_u, w_u, w_v] = \Theta(\min\{1, \frac{w_u w_v}{W} \})$, precisely like Chung-Lu just forgetting node locations $(\vec{x}_u)_{u \in V}$.
 
-Therefore properties/results about Chung-Lu generated graphs carry through automatically to GIRGs, like simple facts that $E[d_u] = \Theta(w_u)$ (the expected degree of a node $u$ with weight $w_u$ is proportional to $w_u$).
+Therefore properties/results about Chung-Lu generated graphs carry through automatically to GIRGs, such as the fact that $E[d_u] = \Theta(w_u)$ - the expected degree of a node $u$ with weight $w_u$ is proportional to $w_u$.
 
 This seems strange as we have the $(w_u w_v / W)^\alpha$ term in the edge probabilities, however as introduced above, $\alpha$ only affects the decay rate of edge probabilities for long edges, which is only a constant fraction of total edge probability, as long as $\alpha > 1$. If $\alpha$ were smaller we would actually blow up the degree $d_u$ far beyond $w_u$, as the large number of potential long edges would have too many realised as actual edges, and dominate the short edges.
 
@@ -303,7 +303,7 @@ Intuitively in the social network analogy, this is like saying that all people, 
 If instead of having undirected edges $u \sim v$ we had directed edges $u \to v$, we could even have a model where $p(u \to v) \propto \sqrt{Vol(B_{r_{uv}}(u))}$, such that $u$ would in expectation have the same number of outgoing edges whatever its location $\vec{x}_u$.
 % Thus if we were modelling directed edges, we could have equality in $E_r[p_{u \to v}(r)]$ in all GIRGs of differing distance metric, number of dimensions and torus / cube geometry by using volume based formulations.
 Unfortunately desire to make friends doesn't equate to actual friends, as they have to want you back.
-So if a node $u$ is near the edge of the cube, while it would send out the normal volume based amount of friendship invitations ($u \to v$), as most of these go to nodes $v$ nearer the centre of the cube, fewer will reciprocate ($v \to u$). In the directed torus geometry analogy, due to symmetry, every $p(u \to v) = p(v \to u)$. This means more pairs of $u \leftrightarrow v$, and fewer pairs of "unrequited friendships" i.e. $u \to v;\, v \not\to u$.
+So if a node $u$ is near the edge of the cube, while it would send out the normal volume based amount of friendship invitations ($u \to v$), as most of these go to nodes $v$ nearer the centre of the cube, fewer will reciprocate ($v \to u$). In the directed torus geometry analogy, due to symmetry, every $p(u \to v) = p(v \to u)$. This means more pairs of $u \leftrightarrow v$, and fewer pairs of \q{unrequited friendships} i.e. $u \to v;\, v \not\to u$.
 % In the torus geometry (all weights being equal), every $u$ would have the same expected number of outgoing edges as incoming.
 % In the torus geometry version of this analogy, due to symmetry, every $p(u \to v) = p(v \to u)$. This would actually end up with more pairs of $u \leftrightarrow v$.
 Hence a volume based cube GIRG in the undirected setting would still have higher average degree than the distance based version, but lower than the torus.
@@ -333,7 +333,7 @@ We use the distance based cube GIRG formulation, which permits a simple generati
 The coupling works for any pair of torus/cube distance functions $r_{uv}^\text{cube} \geq r_{uv}^T$, which results in stochastically dominated edge probabilities $p_{uv}^\text{cube} \leq p_{uv}^\T$. Thus we can couple the events $u \sim v$ in the cube GIRG as a subset of the events $u \sim v$ in the torus GIRG. We just have to inspect each of the $\Theta(n)$ edges in the torus GIRG, and flip a $\Bernoulli(p_{uv}^\text{cube} / p_{uv}^\T)$ coin for each to decide whether to keep / delete the edge for the cube GIRG.
 
 \begin{algorithm}
-    \caption{Generate Cube GIRG from Torus via coupling}\label{alg:cube_coupling}
+    \caption{Generate cube GIRG from torus GIRG via coupling}\label{alg:cube_coupling}
     \begin{algorithmic}
     \Require $n$, $d$, $c$, $\tau$, $\alpha$
     \State $\left ( G, \{x_u\}_{u \in V}, \{w_u\}_{u \in V} \right ) \gets \text{torus-}\GIRG(n,d,c,\tau, \alpha)$
@@ -359,13 +359,13 @@ The coupling works for any pair of torus/cube distance functions $r_{uv}^\text{c
 
 \section{Minimum Component Distance (MCD) GIRGs}
 In \cref{sec:GIRG_def} we introduced the max norm $\norm{\cdot}_\infty$, euclidean norm, and the minimum component distance (MCD) $\norm{\cdot}_{\mathrm{mcd}}$ as alternative distance functions.
-While the max norm is commonly used in e.g. \cite{bringmann2019geometric} as its handy for proofs, the MCD can make more sense in some settings. For instance in social networks, the max norm is like stipulating that people only make friends with others that "tick all the boxes", i.e. are similar in every dimension (this sounds more like finding a romantic partner). The MCD is saying that you make friends with people who are similar in at least one dimension. E.g. an individual might play in the local football club, and sing in the local choir - each a social circle formed from one shared hobby.
+While the max norm is commonly used in e.g. \cite{bringmann2019geometric} as its handy for proofs, the MCD can make more sense in some settings. For instance in social networks, the max norm is like stipulating that people only make friends with others that \q{tick all the boxes}, i.e. are similar in every dimension (this sounds more like finding a romantic partner). The MCD is saying that you make friends with people who are similar in at least one dimension. E.g. an individual might play in the local football club, and sing in the local choir - each a social circle formed from one shared hobby.
 
-The MCD can be mixed with the max norm in an "and/or" fashion, e.g.
+The MCD can be mixed with the max norm in an \q{and/or} fashion, e.g.
 \begin{equation}
     \norm{x - y}_\text{mix} = \min \left ( ||\vec{x}_1 - \vec{y}_{1}||_\infty, ||\vec{x}_{[2,3]} - \vec{y}_{[2,3]}||_\infty, ||\vec{x}_{[4,5]} - \vec{y}_{[4,5]}||_\infty \right )
 \end{equation}
-This parses as points $x, y$ being "close" if they are close in the 1st dim, or the 2nd and 3rd dim, or the 4th and 5th dim. We call this a min/max mixed GIRG.
+This parses as points $x, y$ being \q{close} if they are close in the 1st dim, or the 2nd and 3rd dim, or the 4th and 5th dim. We call this a min/max mixed GIRG.
 
 
 \subsection{Volume Formula for MCD, and Mixed Norms}
@@ -404,9 +404,9 @@ This can be extended to min/max mixed GIRGs with $(I_i)_{i=1}^k$ a partition of 
 \subsection{MCD GIRG speedy combination of 1d GIRGs generating algorithm}
 We saw in \cref{sec:blasius_cpp_generation} that the max torus GIRG implementation of \cite{blasius2022efficiently} has a runtime of $O(n)$ for fixed $d$, but this scales exponentially in $d$. We propose a faster algorithm that basically generates an MCD GIRG by generating $d$ 1d GIRGs each in $O(n)$ time, and combining them together into one graph in total $O(dn)$ time. This gives a significant advantage to using MCD GIRGs over max GIRGs already for dimensions as low as $d=4$.
 
-As an example if we want to generate an MCD GIRG of dim $d=3$, it actually looks quite like a union of $3$ one dimensional GIRGs $G_1, G_2, G_3$, each sharing the same node weight sequence, but with independtly 1d distributed node locations. Critically, the majority of edges in the resultant 3d MCD GIRG $G$ occur between nodes which happen to be quite close in just one dimension, and not in the other dimensions. This means that we don't have to significantly over generate many edges in the 1d GIRGs to produce our MCD GIRG.
+As an example, if we want to generate an MCD GIRG of dim $d=3$, it actually looks quite like a union of $3$ one dimensional GIRGs $G_1, G_2, G_3$, each sharing the same node weight sequence, but with independently 1d distributed node locations. Critically, the majority of edges in the resultant 3d MCD GIRG $G$ occur between nodes which happen to be quite close in just one dimension, and not in the other dimensions. This means that we don't have to significantly over generate many edges in the 1d GIRGs to produce our MCD GIRG.
 
-If $\alpha=\infty$ the "union of 1d GIRGs" statement is almost true. For a node pair $(u,v)$, let $r_1, r_2, r_3$ be the distances in the $3$ 1d GIRGs and $p_1, p_2, p_3$ the corresponding edge probabilities. WLOG letting $r_1 \leq r_2 \leq r_3$, then $\alpha = \infty \implies p_i \in \{0, 1\}$, so in particular $u \stackrel{3}{\sim} v \implies u \stackrel{2}{\sim} v \implies u \stackrel{1}{\sim} v$. This means we could directly take the union over all edges in $G_1, G_2, G_3$ to produce our 3d MCD GIRG $G$. In the $\alpha < \infty$ case we rather must additionally check that any final edge does come from the smallest $r_i$ graph. E.g. it could be that $p_1 = 0.5, p_2 = 0.3, p_3 = 0.01$, and that $u \sim v$ only in $G_2$ - in this case we would take $u \not \sim v$ in $G$ as the minimum component is $i=1$, thus we copy edge/non-edge for $(u, v)$ from $G_1$. 
+If $\alpha=\infty$ the \q{union of 1d GIRGs} statement is almost true. For a node pair $(u,v)$, let $r_1, r_2, r_3$ be the distances in the $3$ 1d GIRGs and $p_1, p_2, p_3$ the corresponding edge probabilities. WLOG letting $r_1 \leq r_2 \leq r_3$, then $\alpha = \infty \implies p_i \in \{0, 1\}$, so in particular $u \stackrel{3}{\sim} v \implies u \stackrel{2}{\sim} v \implies u \stackrel{1}{\sim} v$. This means we could directly take the union over all edges in $G_1, G_2, G_3$ to produce our 3d MCD GIRG $G$. In the $\alpha < \infty$ case we rather must additionally check that any final edge does come from the smallest $r_i$ graph. E.g. it could be that $p_1 = 0.5, p_2 = 0.3, p_3 = 0.01$, and that $u \sim v$ only in $G_2$ - in this case we would take $u \not \sim v$ in $G$ as the minimum component is $i=1$, thus we copy edge/non-edge for $(u, v)$ from $G_1$. 
 
 There's a subtle difference however in that the $3$ 1d GIRGs actually need edge probabilities corresponding to those in the resultant MCD GIRG. This means taking
 \begin{align*}
@@ -416,25 +416,42 @@ There's a subtle difference however in that the $3$ 1d GIRGs actually need edge 
         \right )     
     \right \}
 \end{align*}
-rather than the standard 1d GIRG edge probability which just has $2 r_i$ in the denominator. This pleasingly gives us that $p_i \leq p_{uv}$, since $r_{uv} := \min_j r_j \leq r_i$ where $p_{uv}$ and $r_{uv}$ are the edge probability, node pair distance respectively in the final 3d MCD GIRG. This means that in expectation the number of edges in each 1d GIRG is fewer than in the resultant MCD GIRG, i.e. $O(n)$ - this matches our "union of 1d GIRGs" intuition.
+rather than the standard 1d GIRG edge probability which just has $2 r_i$ in the denominator. This pleasingly gives us that $p_i \leq p_{uv}$, since $r_{uv} := \min_j r_j \leq r_i$ where $p_{uv}$ and $r_{uv}$ are the edge probability, node pair distance respectively in the final 3d MCD GIRG. This means that in expectation the number of edges in each 1d GIRG is fewer than in the resultant MCD GIRG, i.e. $O(n)$ - this matches our \q{union of 1d GIRGs} intuition.
 
-\paragraph{Extension to max GIRGs} - We would like to use this higher dimension GIRG generating algorithm for max GIRGs as well. Unfortunately, although the algorithm is still correct, its runtime blows up due to the fact that each 1d GIRG will now have many more than $\Theta(n)$ edges. In short, now $r_{uv} := \max_j r_j \geq r_i$, so each 1d GIRG in expectation has more edges than the resultant max GIRG. 
+\paragraph{Extension to max GIRGs} We would like to use this higher dimension GIRG generating algorithm for max GIRGs as well. Unfortunately, although the algorithm is still correct, its runtime blows up due to the fact that each 1d GIRG will now have many more than $\Theta(n)$ edges. In short, now $r_{uv} := \max_j r_j \geq r_i$, so each 1d GIRG in expectation has more edges than the resultant max GIRG. 
 
-TODO the Blasius algorithm is "O(n)". It's definitely at least $O(|E|)$, but is it worse?
+% TODO the Blasius algorithm is "O(n)". It's definitely at least $O(|E|)$, but is it worse?
 
-To generate the individual 1d GIRGs, we need at least complexity in their number of edges $O(|E|)$ which is no longer $\Theta(n)$. We give a sketchy intutition that can be made more rigorous:
+To generate the individual 1d GIRGs, we need at least complexity in their number of edges $O(|E|)$ which is now much larger than $\Theta(n)$. We give a sketchy intutition that can be made more rigorous:
 
-Focusing on the $\Theta(1)$ fraction of edges in the resultant max GIRG which are both short: $p_{uv} = 1$ due to $c \left ( \frac{w_u w_v / W}{(2r)^d} \right ) \geq 1$, and between nodes of small weight e.g. $w_u, w_v \in [1, 2]$. Then for a fixed average degree $\overline{\text{deg}}$ of the max GIRG, we can roughly say that the neighbours of a node $u$ are exactly the nodes contained in a box of volume $\frac{\overline{\text{deg}}}{n}$ around it, i.e. one of side length $2r  = \left ( \frac{\overline{\text{deg}}}{ n} \right )^{1/d}$.
-Then considering the 1d GIRG whose node locations are the projection of all nodes onto one of the dimensions $i$, the whole strip of $[0, 1]^d$ of volume $2r$ gets projected down into the segment $[(\vec{x}_u)_i - r, (\vec{x}_u)_i +r]$.
-This contains in expectation $n \cdot 2r$ nodes, and is roughly the set of neighbours of $u$ in the ith 1d GIRG. Putting this together means that average degree in the 1d GIRG is $\widetilde{\text{deg}} = 2nr = \Theta(n^{1 - 1/d})$.
+For a node $u$ of fixed weight, consider the neighbours of $u$ of small weight $w_v$, connected to $u$ by a short edge, in both the resultant d-dim max GIRG, and one of the individual 1d GIRGs.
+% , i.e. $p_{uv} = 1$ due to $c \left ( \frac{w_u w_v / W}{(2r)^d} \right ) \geq 1$
+In both, these edges constitute on average a constant fraction of all of $u$'s edges.
+In the resultant d-dim max GIRG, these come from a box of side length roughly $2r = \left ( \frac{\overline{\text{deg}}}{ n} \right )^{1/d}$ about $u$, resulting in $u$ having about $\overline{deg}$ neighbours.
+In contrast, in the 1d GIRG of dimension $i$, the whole strip of nodes whose projection thereon is in the range $[(\vec{x}_u)_i - r, (\vec{x}_u)_i +r]$ will end up as neighbours of $u$.
+This gives $u$ a much higher degree in the 1d GIRG, of at least $\widetilde{\text{deg}} = 2nr = \Theta(n^{1 - 1/d})$ in expectation.
 
-This means that generating a $d$-dimensionsal max GIRG with our combination of 1d GIRGs algorithm has runtime at least $O(d \cdot n^{2 - 1/d})$. This is still better than the naive $O(n^2)$ algorithm, and is actually faster than "exponential in d, linear in n" $O(e^{kd} n)$ in the regime where $d \gg \log n$.
+
+% Focusing on the $\Theta(1)$ fraction of edges in the resultant max GIRG which are both short and between nodes of small weight, i.e. $p_{uv} = 1$ due to $c \left ( \frac{w_u w_v / W}{(2r)^d} \right ) \geq 1$ and e.g. $w_u, w_v \in [1, 2]$. Then for a fixed average degree $\overline{\text{deg}}$ of the max GIRG, we can roughly say that the neighbours of a node $u$ are exactly the nodes contained in a box of volume $\frac{\overline{\text{deg}}}{n}$ around it, i.e. one of side length $2r  = \left ( \frac{\overline{\text{deg}}}{ n} \right )^{1/d}$.
+
+% In contrast, considering the 1d GIRG whose node locations are the projection of all nodes onto one of the dimensions $i$, the whole strip of $[0, 1]^d$ of volume $2r$ gets projected down into the segment $[(\vec{x}_u)_i - r, (\vec{x}_u)_i +r]$.
+% This contains in expectation $n \cdot 2r$ nodes, and are all neighbours of $u$ in the ith 1d GIRG. Putting this together means that average degree in the 1d GIRG is $\widetilde{\text{deg}} = 2nr = \Theta(n^{1 - 1/d})$.
+
+This means that generating a $d$-dimensionsal max GIRG with our combination of 1d GIRGs algorithm has runtime at least $O(d \cdot n^{2 - 1/d})$. This is still better than the naive $O(n^2)$ algorithm, and is actually faster than exponential in d, linear in n: $O(e^{kd} n)$, in the regime where $d \gg \log n$.
 
 
 \paragraph{Extension to mixed GIRGs}
 Although the algorithm doesn't have as good a runtime on max GIRGs, it's easy to see that it does extend well to a mixed GIRG whose distance function has an outer minimum - of the form $r(\vec{x}, \vec{y}) = \min \left ( \norm{\vec{x}_{I_1} - \vec{y}_{I_1}}_1, ..., \norm{\vec{x}_{I_k} - \vec{y}_{I_k}}_k  \right )$. We just need a routine to sample the GIRGs in each dimension subset which also returns the distance in that subset for each edge. Then we can combine each of these GIRGs' edges together to form the final output GIRG. The number of overcounted (and hence needed to be discarded) edges from the subset GIRGs won't exceed the final edge count by more than a factor of $d$. This depends on the point locations - e.g. in the simple $d=2$ MCD GIRG case we expect little overcounting, however if the points all lie close to a linear subspace $x_1 = x_2$, then we get almost exactly double counting.
 
 Therefore we can efficiently sample e.g. high dimensional mixed min/max GIRGs as long as each inner max dimension subset is small, such as $|I_j| \leq 3$.
+
+
+
+\subsection{Distorted GIRGs}
+\label{subsec:distorted_girgs}
+A final GIRG variant that we only play with in \cref{chap:diff_maps} is the \textit{distorted GIRG}. This is a GIRG where the node locations' dimensions aren't all treated equally - rather they are ordered in importance $1 > 2 > ... > d$ via some weighting scheme $1=\lambda_1 \geq \lambda_2 \geq ... \lambda_d > 0$. For instance a max norm distorted torus GIRG would have $r(\vec{x}, \vec{y}) = \max_i \lambda_i |x_i - y_i|_C$. Oddly, to distort a MCD GIRG you instead have to use the inverse weights $\lambda_i^{-1}$, as now the smallest dimension distance has the greatest influence on the overall node distance.
+
+The idea of distorted GIRGs is natural - that some dimension are more important than others in influencing edges. For social networks it could be e.g. that socioeconomic status of individuals has much higher impact on their friendships than whether they're into football or basketball. The weighted representation is easy to work with but an alternative is to literally distort the space $\chi = \T^d$ or $\chi = [0,1]^d$ to be cuboidal, i.e. no longer cube shaped.
 
 % Our 1d modified to be $d$-d edge probability like GIRGs have strictly more edges than their normal 1d counterparts, as they have $(2r_i)^d \leq 2r_i$ in their $p_{uv}$ denominator.
 
@@ -471,6 +488,7 @@ Therefore we can efficiently sample e.g. high dimensional mixed min/max GIRGs as
 % with just the fact that the underlying space is a Cube rather than a Torus changing the connection probabilities. The second is a more direct distance based formulation, $p_{uv}(r) = \min \left \{1, \left ( \frac{w_u w_v}{n r_{uv}^d} \right )^\alpha \right \}$. To be clear, these two formulations are for a given fixed distance function $r_{uv} = r(x_u, x_v) = ||x_u - x_v||_\infty$. 
 
 % The volumetric formulation has the benefit that all nodes have the same expected degree profile no matter their location, whereas for the distance based formulation, a node near the edge of the cube would have fewer neighbours in expectation than if it were more centrally located. The distance based formulation 
+
 
 
 \begin{comment}
