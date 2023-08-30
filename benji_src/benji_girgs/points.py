@@ -1,5 +1,7 @@
 import numpy as np
 from typing import List
+import torch
+
 
 import os
 
@@ -36,11 +38,23 @@ class Points(np.ndarray):
         """
         return get_dist(self, other)
 
-# True to Volume version of Points - need adjustments in const
+
 class PointsTrue(Points):
+    """
+    True to Volume version of Points - need adjustments in const
+    Idea is that dist(s) will return Vol(r_{uv})^{1/d}.
+        E.g. for a max torus GIRG, Vol(r_{uv}) = (2r)^d so dist will just return 2r.
+    This is then used in get_probs and is taken ^d
+    The Blasius const estimation for desired avg degree isn't designed for true to volume, has to be adjusted
+    by a factor of 2^d at some point.
+    """
     pass
 
 class PointsTorus(Points):
+    """
+    This version matches precisely Blasius C++ code - so isn't true to volume, and rather
+    dist(s) returns r_uv not 2r_uv
+    """
     def __new__(cls, input_array):
         # Input array is an already formed ndarray instance
         # We first cast to be our class type
@@ -54,9 +68,10 @@ class PointsTorus(Points):
     def dist(self, other):
         return get_dist(self.astype(np.float16), other.astype(np.float16))
 
-# Potentiallly we get rid of this, but its a "True to volume" version of PointsTorus - PointsTorus matches
-# C++ GIRGs.
 class PointsTorus2(PointsTrue):
+    """
+    True to volume version of PointsTorus: dist(s) returns 2_uv
+    """
     def __new__(cls, input_array):
         # Input array is an already formed ndarray instance
         # We first cast to be our class type
@@ -73,7 +88,7 @@ class PointsTorus2(PointsTrue):
 
 
 
-# This class is useful as a cube GIRG indicator, although we never atcually use the
+# This class is useful as a cube GIRG indicator, although we never actually use the
 # dists function directly, rather cgirg_gen_cube_coupling uses base Torus Points.
 class PointsCube(PointsTrue):
     def __new__(cls, input_array):
@@ -83,6 +98,8 @@ class PointsCube(PointsTrue):
         # Finally, we must return the newly created object:
         return obj
 
+
+    # TODO reinstate np.float16
     def dists(self, other=None, b_vec=None):
         if other is None:
             other = self
@@ -90,6 +107,37 @@ class PointsCube(PointsTrue):
 
     def dist(self, other, b_vec=None):
         return 2*get_dist_cube(self.astype(np.float16), other.astype(np.float16), b_vec=b_vec)
+
+# HANDLED_FUNCTIONS={}
+# class PointsCubePytorch(torch.Tensor, PointsCube):
+#     def __new__(cls, input_array):
+#         return super().__new__(cls, x)
+#         # # Input array is an already formed ndarray instance
+#         # # We first cast to be our class type
+#         # obj = torch.as_tensor(input_array)
+#         # )
+#         # # Finally, we must return the newly created object:
+#         # return obj
+#
+#     @classmethod
+#     def __torch_function__(cls, func, types, args=(), kwargs=None):
+#         if kwargs is None:
+#             kwargs = {}
+#         if func not in HANDLED_FUNCTIONS or not all(
+#             issubclass(t, (torch.Tensor, PointsCubePytorch))
+#             for t in types
+#         ):
+#             return NotImplemented
+#         return HANDLED_FUNCTIONS[func](*args, **kwargs)
+
+
+class PointsCubePytorch(torch.Tensor):
+    def __new__(cls, x):
+        return super().__new__(cls, x)
+
+    def dist(self, other, b_vec=None):
+        return 2 * get_dist_cube_pytorch(self, other, b_vec=b_vec)
+
 
 ########## NB
 # For PointsMCD and PointsSimpleMixed, we actually exponentiate the distances
@@ -118,18 +166,18 @@ class PointsCube(PointsTrue):
 #
 # I think we'd best use this full formula throughout for consistency
 class PointsMCD(PointsTrue):
-
+    true_d = None
     def __new__(cls, input_array):
         obj = np.asarray(input_array).view(cls)
         return obj
 
     def dists(self):
         n, d = self.shape
+        if self.true_d:  # we'll use this to do 1d -> many d MCD algo.
+            d = self.true_d
         r = get_dists_mcd(self)
-        # return (n**((d-1)/d) * r)**(1/d)
-        # out = n - (n**(1/d) - 2*r)**d
+
         out = 1 - (1 - 2*r)**d
-        # out = 1 - (1 - r)**d
         return out**(1/d)
 def get_points_simple_mixed_class(groups):
     """
@@ -228,13 +276,13 @@ def get_dists2(torus_points: np.ndarray, torus_side_length):
 # Minimal extra memory
 # This one seems hella faster
 def get_dists(torus_points1: np.ndarray, torus_points2: np.ndarray, max=True, b_vec=None):
-    diff = np.abs(torus_points1[:, None, :] - torus_points2[None, :, :])
+    l = len(torus_points1.shape) - 1
+    diff = np.abs(torus_points1[(slice(None),)*l + (None, slice(None))] - torus_points2[:, :])
     torus_diff = np.minimum(diff, 1 - diff)
     if b_vec is not None:
         # should be (d,) and (n, d)
         assert b_vec.shape[0] == torus_points1.shape[1]
         torus_diff *= b_vec
-    # dists = np.linalg.norm(torus_diff, ord=np.inf, axis=-1)
     dists = torus_diff.max(axis=-1) if max else torus_diff.min(axis=-1)
     return dists
 
@@ -254,17 +302,30 @@ def get_dist(torus_points1: np.ndarray, torus_points2: np.ndarray, max=True, b_v
 def get_dists_julia(torus_points: np.ndarray):
     torus_points = torus_points.astype(np.float16)
     # return jl.get_dists_novars(torus_points)
-    return get_dists(torus_points, max=True)
+    return get_dists(torus_points, torus_points, max=True)
 
 
 def get_dists_cube(points1: np.ndarray, points2: np.ndarray, b_vec=None):
+    # e.g. (n1, d) and (n2, d), or e.g. (d,) and (n2, d)
+    # output is (n1, n2) shaped or even (n2,) shaped if latter.
     if b_vec is not None:
         # should be (d,) and (n, d)
         assert b_vec.shape[0] == points1.shape[1]
         points1 *= b_vec
         points2 *= b_vec
 
-    return np.linalg.norm(points1[:, None, :] - points2[None, :, :], ord=np.inf, axis=-1)
+
+    l = len(points1.shape)-1
+    return np.linalg.norm(points1[(slice(None),)*l + (None, slice(None))] - points2, ord=np.inf, axis=-1)
+
+def get_dist_cube_pytorch(points1: torch.tensor, points2: torch.tensor, b_vec=None):
+    # if b_vec is not None:
+    #     # should be (d,) and (n, d)
+    #     assert b_vec.shape[0] == points1.shape[1]
+    #     points1 *= b_vec
+    #     points2 *= b_vec
+    # return np.linalg.norm(points1 - points2, ord=np.inf, axis=-1)
+    return (points1 - points2).abs().max(axis=-1).values
 
 def get_dist_cube(points1: np.ndarray, points2: np.ndarray, b_vec=None):
     if b_vec is not None:
@@ -278,7 +339,7 @@ def get_dists_mcd(points: np.ndarray):
     # return np.min(np.abs(points[:, None, :] - points[None, :, :]), axis=-1)
     points = points.astype(np.float16)
     # return jl.get_dists_novars_min(points)
-    return get_dists(points, max=False)
+    return get_dists(points, points, max=False)
 
 
 

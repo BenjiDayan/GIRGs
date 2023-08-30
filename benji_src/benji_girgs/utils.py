@@ -23,6 +23,10 @@ def avg_degree(g: Graph):
     num_nodes = g.numberOfNodes()
     return (2 * num_edges) / num_nodes
 
+def adj_mat(g: Graph):
+    gnx = nk.nxadapter.nk2nx(g)
+    return nx.adjacency_matrix(gnx).todense()
+
 def LCC(g):
     """local clustering coefficient - average of CC over all nodes.
     Same as given by the nk.overview

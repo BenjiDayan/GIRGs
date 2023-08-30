@@ -18,6 +18,9 @@ import seaborn as sns
 import os
 import pandas as pd
 
+import torch
+
+
 
 class MCMC_girg():
     def __init__(self, g: nk.Graph, weights: np.ndarray, alpha: float, const: float, pts: points.PointsCube,
@@ -89,12 +92,13 @@ class MCMC_girg():
             self.out_cl, self.percent_edges_captured_cl, self.percent_fake_edges_wrong_cl = CM(self.A, self.A_cl)
         else:
             self.probs_cl = None
+            self.c_cl = None
 
         # print('calibrating const')
-        for _ in range(7):
+        for _ in range(10):
             self.ll, self.expected_num_edges = self.calculate_ll()
-            # print(f'const: {self.const}, expected_num_edges: {self.expected_num_edges}')
-            self.calibrate_const()
+            # print(f'const: {self.const}, expected_num_edges: {self.expected_num_edges}, desired_edges: {self.g.numberOfEdges()}')
+            self.calibrate_const(power=1.0 + 0.2*_)
 
         g_out, A_out, out, percent_edges_captured, percent_fake_edges_wrong = self.get_CM(self.A)
         self.percent_edges_captureds = [(percent_edges_captured, 0)]
@@ -105,14 +109,14 @@ class MCMC_girg():
         self.num_acceptances = 0
         self.num_steps = 0
 
-    def calibrate_const(self):
+    def calibrate_const(self, power=2.0):
         """Makes self.const, self.const_in smaller or bigger to match the desired number of edges
         We use this random e^+-a to make life easier
         We should really use a MCMC log likelihood approach instead but this is a bit of a simpler hack.
 
         Actually a better hack we'll use this ratio trick :/ why not"""
-        ratio = self.expected_num_edges / self.g.numberOfEdges()
-        self.const = self.const/ratio
+        ratio = float(self.expected_num_edges / self.g.numberOfEdges())**power
+        self.const = float(self.const)/ratio
         self.const_in = generation.const_conversion(self.const, self.alpha, d=self.d, true_volume=True)
 
     # TODO wtf is this?
@@ -148,6 +152,23 @@ class MCMC_girg():
             ll += u_ll
         return ll, expected_num_edges/2
 
+
+    @staticmethod
+    def p_u_to_vs_to_ll_pytorch(g, u_index, p_u_to_vs):
+        """p_u_to_vs: vector of probabilities p(u ~ v) of u to each v
+        converts this into a total log likelihood"""
+        out = 0
+        n = g.numberOfNodes()
+        assert n == len(p_u_to_vs)
+        mask = torch.ones(n, dtype=bool)
+        for nhb in g.iterNeighbors(u_index):
+            mask[nhb] = False
+        out += torch.log(p_u_to_vs[~mask]).sum()
+        mask[u_index] = False
+
+        out += torch.log(1 - p_u_to_vs[mask]).sum()
+        return out
+
     @staticmethod
     def p_u_to_vs_to_ll(g, u_index, p_u_to_vs):
         """p_u_to_vs: vector of probabilities p(u ~ v) of u to each v
@@ -164,12 +185,89 @@ class MCMC_girg():
         out += np.log(1 - p_u_to_vs[mask]).sum()
         return out
 
+    def to_pytorch(self):
+        self.weights = torch.tensor(self.weights, dtype=torch.float32)
+        self.pts = points.PointsCubePytorch(self.pts)
 
-    def ordered_point_propose_compare_update(self, num_proposals=100):
+
+    def ordered_pts_const_alpha_loop_pytorch(self, num_alpha_proposals=8, num_const_proposals=3,
+                                     num_loops=10, lr=1e-4, use_tqdm=False):
+        """Does num_loops of ordered point updates, alpha update, const udpate"""
+        print(f'starting: {self.graph_name}', flush=True)
+
+
+        df = pd.DataFrame(columns=['loop', 'll', 'out', 'pec', 'no_failure_cl_pec',
+                                   'no_failure_cl_out',
+                                   'alpha'])
+
+        for loop in range(num_loops):
+            self.ordered_point_propose_compare_update_pytorch(lr=lr, use_tqdm=use_tqdm)
+            self.alpha_update(num_alpha_proposals)
+            for _ in range(num_const_proposals):
+                self.ll, self.expected_num_edges = self.calculate_ll()
+                self.calibrate_const()
+            self.ll, self.expected_num_edges = self.calculate_ll()
+            g_out, A_out, out, percent_edges_captured, percent_fake_edges_wrong = self.get_CM(self.A)
+            self.lls.append((self.ll, loop))
+            self.percent_edges_captureds.append((percent_edges_captured, loop))
+            self.outs.append((out, loop))
+
+            temp_const, temp_constin = self.const, self.const_in
+            temp_ll, temp_expected_num_edges = self.ll, self.expected_num_edges
+            temp_failure_prob, temp_cl_mixin_prob = self.failure_prob, self.cl_mixin_prob
+            self.failure_prob, self.cl_mixin_prob = 0.0, 0.0
+            for _ in range(num_const_proposals+3):
+                self.ll, self.expected_num_edges = self.calculate_ll()
+                self.calibrate_const(power=1 + 0.2*_)
+
+            _, _, no_failure_cl_out, no_failure_cl_pec, _ = self.get_CM(self.A)
+            self.const, self.const_in = temp_const, temp_constin
+            self.ll, self.expected_num_edges = temp_ll, temp_expected_num_edges
+            self.failure_prob, self.cl_mixin_prob = temp_failure_prob, temp_cl_mixin_prob
+
+
+
+            row = {'loop': loop, 'll': self.ll, 'out': out, 'pec': percent_edges_captured,
+                   'no_failure_cl_pec': no_failure_cl_pec,
+                   'no_failure_cl_out': no_failure_cl_out,
+                   'alpha': self.alpha}
+            # print(row, flush=True)
+            df = df.append(row, ignore_index=True)
+
+        return df
+
+    def ordered_point_propose_compare_update_pytorch(self, lr=1e-3, use_tqdm=False):
+
+        self.pts.requires_grad = True
+
+        for u_index in np.argsort(-self.weights) if not use_tqdm else tqdm(
+                np.argsort(-self.weights)):  # largest to smallest
+
+            self.pts.requires_grad = True
+            optimizer = torch.optim.SGD((self.pts,), lr=lr, momentum=0.0)
+
+            gradient_mask = torch.zeros_like(self.pts)
+            _ = gradient_mask[u_index].fill_(1.)
+            self.pts.register_hook(lambda grad: grad.mul_(gradient_mask))
+
+            p_u_to_vs2 = MCMC_girg.get_p_u_to_vs_pytorch(
+                self.weights, self.pts, self.alpha, self.const_in,
+                u_index, self.failure_prob, self.cl_mixin_prob,
+                self.c_cl)
+            u_ll_new = self.p_u_to_vs_to_ll_pytorch(self.g, u_index, p_u_to_vs2)
+
+            loss = -u_ll_new
+            loss.backward()
+            optimizer.step()
+
+            self.pts = torch.clamp(self.pts, 0, 1).detach()
+
+    def ordered_point_propose_compare_update(self, num_proposals=100, use_tqdm=False):
         """Similar to mercator, does a round of ordered updates.
         top weight nodes are updated first.
         """
-        for u_index in np.argsort(-self.weights):  # largest to smallest
+
+        for u_index in np.argsort(-self.weights) if not use_tqdm else tqdm(np.argsort(-self.weights)):  # largest to smallest
             x_u = self.pts[u_index].copy()
 
             nhbs = list(self.g.iterNeighbors(u_index))
@@ -183,7 +281,7 @@ class MCMC_girg():
                 # near to neighbours
                 self.proposal(num_proposals//2, self.d, sigma=0.01,
                               x_u=self.pts[nhbs][np.random.choice(len(nhbs), size=num_proposals//2)],
-                              p_normal=0.7),
+                              p_normal=0.7).reshape((-1,) + x_u.shape),
             ])
 
             x_u2s = np.concatenate([x_u2s, [mean_pos, x_u]])
@@ -201,30 +299,74 @@ class MCMC_girg():
 
             self.pts[u_index] = x_u2s[np.argmax(lls)]
 
+    def non_ordered_point_propose_compare_update(self, num_proposals):
+        mean_pos = []
+        nhbs_choices = []
+        for u_index in range(self.n):
+            nhbs = list(self.g.iterNeighbors(u_index))
+            mean_pos.append(self.pts[nhbs].mean(axis=0))
+            nhbs_choices.append(self.pts[np.random.choice(nhbs, size=num_proposals//2)])
+
+        mean_pos = np.array(mean_pos)
+        nhbs_choices = np.array(nhbs_choices)
+
+        # (num_proposals, n, d)
+        x_u2s = np.concatenate([
+            # near to current position
+            self.proposal(num_proposals // 4, self.d, sigma=0.01, x_u=self.pts, p_normal=0.7),
+            # near to mean position
+            self.proposal(num_proposals // 4, self.d, sigma=0.01, x_u=mean_pos, p_normal=0.7),
+            # near to neighbours
+            self.proposal(1, self.d, sigma=0.01,
+                          x_u=nhbs_choices,
+                          p_normal=0.7).squeeze().transpose(1, 0, 2)
+        ])
+
+        # eps = 1e-7
+        # weight_outer = np.outer(self.weights, self.weights)
+        # # (p, n, d) vs (n, d) -> (p, n, n)
+        # dists = x_u2s.dists(self.pts)
+        # p_u_to_vs = generation.get_probs_u(weights, pts, alpha, const_in, u_index)
+        # p_u_to_vs *= (1 - failure_prob)
+        # if cl_mixin > 0:
+        #     p_u_to_vs_cl = np.minimum(1, c_cl * weights[u_index] * weights)
+        #     p_u_to_vs = (1 - cl_mixin) * p_u_to_vs + cl_mixin * p_u_to_vs_cl
+        # p_u_to_vs = np.clip(p_u_to_vs, eps, 1 - eps)
+
 
     def alpha_update(self, num_proposals=8):
         """proposes num_proposals values of alpha, and updates to the one with the highest likelihood
         (including the current value of alpha)"""
-        alpha_proposals = np.concatenate(
-            [np.random.uniform(1, self.alpha, size=num_proposals//2),
-             [self.alpha],
-             np.random.uniform(self.alpha, self.alpha + 2*(self.alpha - 1), size=num_proposals//2)]
-        )
-        lls = []
-        for alpha in alpha_proposals:
-            self.alpha = alpha
-            ll, _ = self.calculate_ll()
-            lls.append(ll)
 
-        self.alpha = alpha_proposals[np.argmax(lls)]
+        ll, _ = self.calculate_ll()
+        for i in range(num_proposals):
+            power = 0.2 - (0.2*i / num_proposals)
+            alpha_minus = self.alpha**(1 - power)
+            alpha_plus = self.alpha**(1 + power)
+
+            alpha_proposals = [alpha_minus, self.alpha, alpha_plus]
+
+
+        # alpha_proposals = np.concatenate(
+        #     [np.random.uniform(1, self.alpha, size=num_proposals//2),
+        #      [self.alpha],
+        #      np.random.uniform(self.alpha, self.alpha + 2*(self.alpha - 1), size=num_proposals//2)]
+        # )
+            lls = []
+            for alpha in alpha_proposals:
+                self.alpha = alpha
+                ll, _ = self.calculate_ll()
+                lls.append(ll)
+
+            self.alpha = alpha_proposals[np.argmax(lls)]
 
     def ordered_pts_const_alpha_loop(self, num_pt_proposals=100, num_alpha_proposals=8, num_const_proposals=8,
-                                     num_loops=10):
+                                     num_loops=10, use_tqdm=False):
         """Does num_loops of ordered point updates, alpha update, const udpate"""
         df = pd.DataFrame(columns=['loop', 'll', 'out', 'pec', 'alpha'])
 
         for loop in range(num_loops):
-            self.ordered_point_propose_compare_update(num_pt_proposals)
+            self.ordered_point_propose_compare_update(num_pt_proposals, use_tqdm=use_tqdm)
             self.alpha_update(num_alpha_proposals)
             for _ in range(num_const_proposals):
                 self.ll, self.expected_num_edges = self.calculate_ll()
@@ -239,6 +381,31 @@ class MCMC_girg():
             df = df.append(row, ignore_index=True)
 
         return df
+
+    @staticmethod
+    def get_p_u_to_vs_pytorch(weights, pts, alpha, const_in, u_index, failure_prob=0.0, cl_mixin=0.0, c_cl=1.0):
+        """for a given node u, get the vector p(u ~ v) (all v in V)"""
+        eps = 1e-7
+
+        n, d = pts.shape
+        wuwv = weights[u_index] * weights
+        dists = pts[u_index].dist(pts)
+        # added this in to try and avoid nans? even nans shouldn't happen?
+        dists[dists == 0] = eps
+        dists[u_index] = 1.0
+        p_uv = torch.divide(wuwv, dists ** d)
+        p_uv = torch.pow(p_uv, alpha)
+        p_uv = torch.minimum(const_in * p_uv, torch.ones_like(p_uv))
+
+        p_u_to_vs = p_uv
+
+        p_u_to_vs *= (1 - failure_prob)
+        if cl_mixin > 0:
+            p_u_to_vs_cl = torch.minimum(torch.ones_like(weights), c_cl * weights[u_index] * weights)
+            p_u_to_vs = (1 - cl_mixin) * p_u_to_vs + cl_mixin * p_u_to_vs_cl
+        p_u_to_vs = torch.clamp(p_u_to_vs, eps, 1 - eps)
+        return p_u_to_vs
+
 
     @staticmethod
     def get_p_u_to_vs(weights, pts, alpha, const_in, u_index, failure_prob=0.0, cl_mixin=0.0, c_cl=1.0):
@@ -514,13 +681,56 @@ class MCMC_girg():
         plt.plot(np.convolve(acceptances, np.ones(convolve_width) / convolve_width, mode='valid'))
 
     @staticmethod
-    def proposal(num_proposals, d, sigma, x_u, p_normal=0.7):
-        if len(x_u.shape) == 2:  # allow proposals from multiple points
-            assert num_proposals == x_u.shape[0]
-        uniforms = np.random.uniform(size=(num_proposals, d))
-        normals = np.clip(x_u + np.random.normal(size=(num_proposals, d), scale=sigma), 0, 1)
+    def proposal_pytorch(num_proposals, d, sigma, x_u, p_normal=0.7):
+        if len(x_u.shape) == 2:
+            if type(num_proposals) is int or len(num_proposals) == 1:
+                # allow proposals from multiple points
+                assert num_proposals == x_u.shape[0]
+            elif len(num_proposals) == 2:
+                assert num_proposals[1] == x_u.shape[0]
+
+        size = (num_proposals,) + x_u.shape
+
+        uniforms = torch.rand(size=size)
+        normals = torch.clamp(x_u + torch.normal(0, sigma,size=size), 0, 1)
+        mask = torch.bernoulli(torch.ones(size) * p_normal)
+
+        # mask = np.expand_dims(np.random.binomial(1, p_normal, num_proposals), axis=-1)
+        # e.g. mask is (100, 1) and normals is (100, d) (for x_u of shape (d,))
+        # or mask is (100, 5, 1) and normals is (100, 5, d) (for x_u of shape (5, d))
+        return mask * normals + (1 - mask) * uniforms
+
+    # @staticmethod
+    # def proposal(num_proposals, d, sigma, x_u, p_normal=0.7):
+    #     if len(x_u.shape) == 2:
+    #         if type(num_proposals) is int or len(num_proposals) == 1:
+    #             # allow proposals from multiple points
+    #             assert num_proposals == x_u.shape[0]
+    #         elif len(num_proposals) == 2:
+    #             assert num_proposals[1] == x_u.shape[0]
+    #
+    #     num_proposals = tuple(num_proposals)
+    #
+    #     size = num_proposals + (d,)
+    #     uniforms = np.random.uniform(size=size)
+    #     normals = np.clip(x_u + np.random.normal(size=size, scale=sigma), 0, 1)
+    #     mask = np.expand_dims(np.random.binomial(1, p_normal, num_proposals), axis=-1)
+    #     # e.g. mask is (100, 1) and normals is (100, d) (for x_u of shape (d,))
+    #     # or mask is (100, 5, 1) and normals is (100, 5, d) (for x_u of shape (5, d))
+    #     return mask * normals + (1 - mask) * uniforms
+
+    @staticmethod
+    def proposal(num_proposals: int, d, sigma, x_u, p_normal=0.7):
+        size = (num_proposals,) + x_u.shape
+        uniforms = np.random.uniform(size=size)
+        normals = np.clip(x_u + np.random.normal(size=size, scale=sigma), 0, 1)
+        # mask = np.expand_dims(np.random.binomial(1, p_normal, num_proposals), axis=-1)
+        # # e.g. mask is (100, 1) and normals is (100, d) (for x_u of shape (d,))
+        # # or mask is (100, 5, 1) and normals is (100, 5, d) (for x_u of shape (5, d))
         mask = np.random.binomial(1, p_normal, num_proposals)
-        return mask[:, None] * normals + (1 - mask[:, None]) * uniforms
+        mask = np.expand_dims(mask, axis=tuple(i for i in range(1, len(x_u.shape)+1)))
+        return mask * normals + (1 - mask) * uniforms
+
 
 
     def gen_girg(self):
@@ -531,20 +741,20 @@ class MCMC_girg():
         return g
 
 
-    def get_CM(self, A):
-        g_out, A_out = self.MC_to_g_A()
+    def get_CM(self, A, failure_prob=None):
+        g_out, A_out = self.MC_to_g_A(failure_prob=failure_prob)
 
         out, percent_edges_captured, percent_fake_edges_wrong = CM(A, A_out)
         return g_out, A_out, out, percent_edges_captured, percent_fake_edges_wrong
 
-    def MC_to_g_A(self):
+    def MC_to_g_A(self, failure_prob=None):
         tau = 2.1  # Ignored
         g, edges, weights, pts, const = generation.generate_GIRG_nk(
             self.n, self.d, tau, self.alpha, weights=self.weights_original,
             const=self.const,
             pts=self.pts,
             points_type=points.PointsCube,
-            failure_rate=self.failure_prob)
+            failure_rate=self.failure_prob if failure_prob is None else failure_prob)
 
 
 

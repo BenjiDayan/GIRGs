@@ -2,6 +2,7 @@ import networkit as nk
 import networkx as nx
 import numpy as np
 from networkit.graph import Graph
+from tqdm import tqdm
 
 from benji_girgs.utils import get_perc_lower_common_nhbs, graph_degrees_to_weights, graph_degrees_to_weights
 from benji_girgs import mcmc
@@ -38,7 +39,11 @@ def chung_lu_fit_c(g, weights):
 
 
     """
-    num_edges = g.numberOfEdges()  # = (1/2) Sum p_uv
+    if type(g) is nk.Graph:
+        num_edges = g.numberOfEdges()  # = (1/2) Sum p_uv
+    else:  # hack if you want to use g as e.g. 50.0 desired average degree.
+        desired_avg_degree = g
+        num_edges = desired_avg_degree * len(weights) / 2
     c = 1.0
     # triggered will ensure that c goes just small enough so that probs now less than 1
     triggered = False
@@ -62,6 +67,17 @@ def chung_lu_fit_c(g, weights):
 def fit_chung_lu(g, seed=None):
     nk.setSeed(seed=42 if seed is None else seed, useThreadId=False)
     return nk.generators.ChungLuGenerator.fit(g).generate()
+
+def generate_chung_lu(n, tau=2.5, desiredAvgDegree=50.0):
+    weights = powerlaw_dist(tau, 1, n)
+
+    c, probs_cl = chung_lu_fit_c(desiredAvgDegree, weights)
+    unif_mat = np.random.uniform(size=(n, n))
+    adj_cl = np.triu((unif_mat < probs_cl), 1)
+    edges = upper_triangular_to_edgelist_fastest(adj_cl)
+    g_cl = edge_list_to_nk_graph(edges, n)
+
+    return g_cl
 
 def chung_lu_get_stuff(g):
     weights = np.array(graph_degrees_to_weights(g))
@@ -129,17 +145,22 @@ def generatePositions(
     return np.random.uniform(size=(n, dimension))
 
 
-def get_probs(weights: np.ndarray, pts: Points, alpha=2.0, const=1.0):
+def get_probs(weights: np.ndarray, pts: Points, alpha=2.0, c=1.0, other_d: Optional[int] = None):
     """
     Computes min(1, w_u w_v / ||x_u - x_v||_inf^d)^alpha
     as a big n x n square matrix (we only need upper triangular bit tho)
+
+    other_d could be some integer > than perceived pts dim, if we're using this GIRG as a subcomponent
+    of another GIRG - see quick_MCD_algo_test
     """
     outer = np.outer(weights, weights)
     n, d = pts.shape
+    if type(other_d) is int:
+        d = other_d
     dists = pts.dists()
     p_uv = np.divide(outer, dists**d)  
     p_uv = np.power(p_uv, alpha)
-    p_uv = np.minimum(const * p_uv, 1)
+    p_uv = np.minimum(c * p_uv, 1)
     return p_uv
 
 
@@ -282,9 +303,10 @@ def generateEdges(
     positions: Union[Points, np.ndarray],
     alpha: float,
     *,
-    const: float = 1.0,
+    c: float = 1.0,
     seed: int = None,
-    failure_rate: float = 0.0
+    failure_rate: float = 0.0,
+    other_d: Optional[int] = None
 ) -> np.ndarray:
     """Generates edges for a GIRG with given
     weights: (n,) array of weights
@@ -296,7 +318,7 @@ def generateEdges(
     # Convert to torus points if not already a dist'able instance
     if not issubclass(type(positions), Points):
         positions = PointsTorus(positions)
-    probs = get_probs(weights, positions, alpha, const)
+    probs = get_probs(weights, positions, alpha, c, other_d)
     probs *= (1-failure_rate)
     unif_mat = np.random.uniform(size=probs.shape)
     # upper triangular matrix - lower half and the diagonal zeroed
@@ -354,20 +376,22 @@ def quick_expected_degree_func(weights, alpha, c):
 
 def const_conversion(const, alpha, d=None, true_volume=False):
     """
+    Convert Blasius C++ const -> c
+        - where our c is used in p_uv = min(1, c [ (wu wv / W) / r^d ]^alpha)
+        - const used by Blasius (returned by girgs.scaleWeights) is used to scale weights w_u -> const w_u.
+            this makes w_u w_v / W -> const w_u w_v / W, and so the true c (w_u w_v/W / r^d)^alpha is c = const^alpha
 
-    The const c used by Blasius (returned by scaleWeights) is intended to be used actually as c^alpha
-
-    This is necessary because the c from girgs.scaleWeights is actually used for w_i -> c w_i.
-    This makes w_u w_v / W -> c w_u w_v / W, and so the true c' (w_u w_v/W / r^d)^alpha is c' = c^alpha
-
-    What's worse if we're using a true volume formulation, we replace c by c * (2**d).
+    What's worse if we're using a true volume formulation, we replace const by const * 2^d
+        - Blasius does [ (const wu wv / W) / r^d ]^alpha
+        - Our true volume is [ (const wu wv / W) / (2r)^d ]^alpha
+        - So we need to replace const by const * 2^d so as to counteract the 2^d in the denominator
     """
-    out = const
     if true_volume:
         if not type(d) is int and d >=1:
             assert("Must provide a dimension d >= 1")
-        out *= (2**d)
-    return out**alpha
+        const *= (2**d)
+    c = const**alpha  # This is the c used in p_uv = min(1, c [ (wu wv / W) / r^d ]^alpha)
+    return c
 
 def chung_lu_mixin_graph(g, weights, cl_mixin_prob):
     g_out = nk.Graph(g.numberOfNodes())
@@ -396,6 +420,93 @@ def chung_lu_mixin_graph(g, weights, cl_mixin_prob):
         if not g.hasEdge(u, v) and cl_override_mat[u, v]:
             g_out.addEdge(u, v)
     return g_out
+
+# TODO maybe get rid of this. We just want to test the many 1D GIRG case
+def quick_MCD_algo_test(n, d, tau, alpha, const=None, desiredAvgDegree=None,
+                        weights:Optional[np.ndarray] = None,
+                        pts: Optional[np.ndarray] = None,):
+    """
+    ######### NB
+    Annoyingly we can't really use Blasius C++ code to properly test.
+    I don't fully understand all the weight bucketing / cell grids stuff, however
+    essentially we want to have d x 1d GIRGs, which all share the same weights,
+    just independent locations, and crucially still have edge probabilities of
+    p_uv = c [(wu wv / W) / (r_i)^d]^alpha, where r_i is the distanec in the ith 1d GIRG
+    Of course 1d GIRGs in Blasius rather just have r_i^1 = r_i. This we cannot easily
+    fix and C++ is hard. Explains why when I try to do this shit, I end up with
+    all my 1d GIRGs having too few edges - because their p_uv perceived geometric factor
+    is too big (should have r_i^d < r_i)
+
+    Instead we'll do a proof of concept with n^2 1d GIRGing
+
+    """
+    if weights is None:
+        weights = generateWeights(n, tau)
+
+    if const is not None and desiredAvgDegree is not None:
+        raise ValueError("Cannot specify both const and desiredAvgDegree")
+
+    if const is None:
+        if desiredAvgDegree is not None:
+            const = girgs.scaleWeights(weights, desiredAvgDegree, d, alpha)
+        else:
+            const = 1.0
+
+    points_type = PointsMCD
+    true_volume = PointsTrue in points_type.__mro__
+    c = const_conversion(const, alpha, d=d, true_volume=true_volume)
+
+    if pts is None:
+        pts = generatePositions(n, d)
+        pts = points_type(pts)
+
+    weight_normaliser = np.sqrt(np.sum(weights))
+    graphs = []
+    for i in range(d):
+        print(f'generating i={i+1} out of {d}')
+        pts_i = pts[:, i:i+1]
+        pts_i.true_d = d
+        adj_mat = generateEdges(weights / weight_normaliser, pts_i, alpha, c=c, other_d=d)
+        g = edge_list_to_nk_graph(zip(*np.nonzero(adj_mat)), n)
+        graphs.append(g)
+
+
+    # c = const_conversion(const, alpha, d, true_volume=True)
+    #
+    # # We don't rescale const as we're using the C++ non true volume formulation
+    #
+    # if pts is None:
+    #     pts = generatePositions(n, d)
+    #     pts = PointsTorus2(pts)
+    #
+    # edges = []
+    # graphs = []
+    # scaled_weights = list(np.array(weights) * const)
+    # for i in range(d):
+    #     edges.append(girgs.generateEdges(scaled_weights, [[x] for x in pts[:, i]], alpha))
+    #     graphs.append(edge_list_to_nk_graph(edges[-1], n))
+
+    g_out = nk.Graph(n)
+    seen = set()
+    for i, g in enumerate(graphs):
+        print(f'checking edges of i={i+1} out of {d}')
+        for u, v in tqdm(g.iterEdges()):
+            u, v = min(u, v), max(u, v)
+            if (u, v) in seen:
+                continue  # already checked
+            else:
+                seen.add((u, v))
+            min_dim = np.argmin([pts[u, i:i+1].dist(pts[v, i:i+1]) for i in range(d)])
+            if graphs[min_dim].hasEdge(u, v):
+                g_out.addEdge(u, v)
+
+    return g_out, graphs
+
+    #
+    # # note / np.sqrt(np.sum(weights)), s.t. w_u w_v -> (w_u / sqrt(W)) (w_v / sqrt(W)) = w_u w_v / W
+    # weight_normaliser = np.sqrt(np.sum(weights)) if weights_sum is None else np.sqrt(weights_sum)
+    # adj_mat = generateEdges(weights / weight_normaliser, pts, alpha, const=const_in)
+    # pass
 
 
 def generate_GIRG_nk(n, d, tau, alpha,
@@ -436,9 +547,10 @@ def generate_GIRG_nk(n, d, tau, alpha,
         gnk, edges, weights, pts, const = girg_cube_coupling(gnk, edges, weights, pts, const, alpha, PointsCube, W=np.sum(weights))
         return gnk, edges, weights, pts, const
 
-    if c_implementation:
-        gnk, edges, weights, pts, const = cgirg_gen(n, d, tau, alpha, desiredAvgDegree, const, weights)
-        return gnk, edges, weights, pts, const
+    if pts is None:
+        pts = generatePositions(n, d)
+        pts = points_type(pts)
+
 
     if weights is None:
         weights = generateWeights(n, tau)
@@ -449,29 +561,26 @@ def generate_GIRG_nk(n, d, tau, alpha,
     if const is None:
         if desiredAvgDegree is not None:
             const = girgs.scaleWeights(weights, desiredAvgDegree, d, alpha)
+            desiredAvgDegree=None
         else:
             const = 1.0
 
-    # e.g. PointsTorus2 and PointsMCD are both "True Volume", whereas PointsTorus differs by a factor of 2^d.
-    # PointsTorus implementation matces CGIRGs however and hence const, so we must scale based off it.
-    true_volume = PointsTrue in points_type.__mro__
-    const_in = const_conversion(const, alpha, d=d, true_volume=true_volume)
-    # const_in = const * (2 ** d) if PointsTrue in points_type.__mro__ else const
-    # This is necessary because the c from girgs.scaleWeights is actually used for w_i -> c w_i.
-    # This makes w_u w_v / W -> c w_u w_v / W, and so the true c' (w_u w_v/W / r^d)^alpha is c' = c^alpha
-    # const_in = const_in ** alpha
-    # print(f'const_in: {const_in}')
+    if c_implementation:
+        gnk, edges, weights, pts, const = cgirg_gen(n, d, tau, alpha, desiredAvgDegree, const, weights)
+        return gnk, edges, weights, pts, const
 
-    if pts is None:
-        pts = generatePositions(n, d)
-        pts = points_type(pts)
+
+    # e.g. PointsTorus2 and PointsMCD are both "True Volume", whereas PointsTorus differs by a factor of 2^d.
+    # PointsTorus implementation matches CGIRGs however and hence const, so we must scale based off it.
+    true_volume = PointsTrue in points_type.__mro__
+    c = const_conversion(const, alpha, d=d, true_volume=true_volume)
+
 
     # note / np.sqrt(np.sum(weights)), s.t. w_u w_v -> (w_u / sqrt(W)) (w_v / sqrt(W)) = w_u w_v / W
     weight_normaliser = np.sqrt(np.sum(weights)) if weights_sum is None else np.sqrt(weights_sum)
-    adj_mat = generateEdges(weights / weight_normaliser, pts, alpha, const=const_in, failure_rate=failure_rate)
+    adj_mat = generateEdges(weights / weight_normaliser, pts, alpha, c=c, failure_rate=failure_rate)
     # adj_mat = generateEdges(scaled_weights, pts, alpha, const=1.0)
 
-    # g = nk.nxadapter.nx2nk(nx.from_numpy_array(edges))
     g = edge_list_to_nk_graph(zip(*np.nonzero(adj_mat)), n)
     # TODO we used to return const, now we return const_in. Will this mess anything up in the feature extraction?
     return g, adj_mat, weights, pts, const
@@ -484,11 +593,11 @@ def cgirg_gen(n, d, tau, alpha, desiredAvgDegree=None, const=None, weights: Opti
 
     if const is not None and desiredAvgDegree is not None:
         raise ValueError("Cannot specify both const and desiredAvgDegree")
-    
+
     if const is None:
         if desiredAvgDegree is not None:
             const = girgs.scaleWeights(weights, desiredAvgDegree, d, alpha)
-        else:  
+        else:
             const=1.0
 
     scaled_weights = list(np.array(weights) * const)
