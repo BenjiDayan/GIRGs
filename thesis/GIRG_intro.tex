@@ -78,7 +78,7 @@ This influence in GIRGs of node proximity on $p_{uv}$ facilitates the emergence 
 
 % The geometric space $\chi$, and the distance function $\norm{\cdot}$ (not necessarily a norm) can vary a great deal without affecting the key properties of GIRGs. $\chi = \T^d$ the d-dim torus is very handy for proofs, as the viewpoint of any node $x_u$ is equivalently at the "centre" of the space. For real applications the d-dim cube $\chi = [0, 1]^d$ can be more realistic; however it is no longer symmetric; nodes with locations near the edge of the cube are different from those near the centre.
 
-Using the max norm as the distance function, i.e., $\norm{\vec{x}} = \norm{\vec{x}}_\infty = \max_i |x_i|$, is convenient for proofs, but can be replaced by euclidean or other norms - the equivalence of norms there is not much difference. Note that on the torus, the max norm is not strictly a norm, rather we abuse notation to express:
+Using the \textit{max norm} as the distance function, i.e., $\norm{\vec{x}} = \norm{\vec{x}}_\infty = \max_i |x_i|$, is convenient for proofs, but can be replaced by euclidean or other norms - the equivalence of norms there is not much difference. Note that on the torus, the max norm is not strictly a norm, rather we abuse notation to express:
 \begin{align}
     ||\vec{x} - \vec{y}||_\infty &= \max_i |x_i - y_i|_C\\
     |x_i - y_i|_C :&= \min(|x_i - y_i|, 1 - |x_i - y_i|)
@@ -116,15 +116,15 @@ This might appear counterintuitive, given the presence of the $(w_u w_v / W)^\al
 %  (at least within some tolerance and in the large weight tail).
 \begin{align*}
 \eqname{exact power law distribution}
-& \mathrm{w} \sim \powerlaw(\tau)
+& x \sim \powerlaw(\tau)
 \\
 \eqname{pdf (default $x_{\min } = 1$)}
 & p(w) \propto w^{-\tau} \text{ for } w \in [x_{\min }, \infty]
 \\
-& p(\mathrm{w} \geq w) \propto w^{1 - \tau}
+& p(x \geq w) \propto w^{1 - \tau}
 \end{align*}
 % A general In practice a power law degree sequence is required to have a looser version of $\# \{w_u | w_u \geq w\} = \Theta(w^{1 - \tau})$.
-The power law distribution is heavy tailed (heavier than exponentially decaying tails). $\tau > 2$ is important to ensure that $E[\mathrm{w}] = \Theta(1)$, which means that although we may have some very large $w_i$ in a sequence $w_1, ..., w_n$, still the majority of the total weight is in smaller valued $w_i$'s. 
+The power law distribution is heavy tailed (heavier than exponentially decaying tails). $\tau > 2$ is important to ensure that $E[\mathrm{w}] = \Theta(1)$, which means that although we may have some very large $w_i$ in a sequence $w_1, ..., w_n$, still there is an equal balance of total weight between smaller valued $w_i$'s and larger weights. This produces a phenomenon known as the \q{Pareto principle / 80-20 rule}, a common example being the top 20\% richest individuals collectively owning roughly 80\% of total private wealth. That's certainly a heavier tail than an ideally fair society, but it also doesn't completely skew the mean wealth of an individual more than some multiple of the median wealth.
 
 
 \subsection{Volume generalisation}
@@ -153,7 +153,7 @@ Having volume in the edge probability formula is actually a generalisation of ta
 
 \section{Blasius C++ GIRG generation}
 \label{sec:blasius_cpp_generation}
-\cite{blasius2022efficiently} provides a C++ implementation of an efficient algorithm for sampling a max torus GIRG.
+\cite{blasius2022efficiently} provides a C++ implementation of an efficient algorithm for sampling a \textit{max torus GIRG} - with the max norm as distance function and torus geometric space.
 % We started by using the C++ implementation of GIRG generation in \cite{blasius2022efficiently}. 
 Their GIRG formulation uses a toroidal geometry $\chi = \T^d$, with edge probabilities 
 
@@ -167,7 +167,7 @@ Their GIRG formulation uses a toroidal geometry $\chi = \T^d$, with edge probabi
     \label{eq:blasius_GIRG_puv}
 \end{equation}
 i.e. no outer $\Theta$ which gave us more flexibility in the general GIRG definition - just one fixed inner constant $c$ in order to be concrete. 
-Note that this still falls under the wider GIRG definition 
+Note that this still falls under the wider $\Theta$ GIRG definition 
 % of $p_{uv} = \Theta \left [ 
 %     \min \left \{ 
 %         % 1,
@@ -195,7 +195,7 @@ if $c \leq 1$, and with the upper and lower bounds swapped for $c > 1$.
 
 
 They implement the algorithm proposed by \cite{bringmann2019geometric}, which has expected runtime $O(n)$ i.e. linear in the number of nodes, for a GIRG with a power law generated weight sequence.
-This is optimal: such a GIRG has expected number of edges $\Theta(n)$, due to the fact that nodes have finite expected weight $E[w_u] = \Theta(1)$, and expected degree proportional to their weight. I.e. just to write down / store the set of edges $E = \{(u, v) | u \sim v \}$ we need $O(n)$ time/space.
+This is optimal because such a GIRG has expected number of edges $\Theta(n)$, due to the fact that nodes have finite expected weight $E[w_u] = \Theta(1)$, and expected degree proportional to their weight. I.e. just to write down / store the set of edges $E = \{(u, v) | u \sim v \}$ we need $O(n)$ time/space.
 
 \subsection{GIRG Generation with Python}
 Unfortunately this GIRG sampling algorithm scales exponentially in dimension $d$, as it involves breaking the Torus space down hierarchically into smaller cubes and considering edges between neighbouring cubes. We struggled to use it in experiments for $d \geq 4$.
@@ -203,7 +203,7 @@ Unfortunately this GIRG sampling algorithm scales exponentially in dimension $d$
 % Hence a linear runtime algorithm ($O(n)$) is optimal, as even an oracle must write out the list of edges sequentially in $\Theta(n)$ time.
 Hence we also implemented our own GIRG generation code in python for ease of modification to deal with different types of GIRG and to cope with higher dimensions $d$. 
 % We use the same specific $p_{uv} = \min(1, c \cdot)$ as in \cref{eq:blasius_GIRG_puv}. 
-Our algorithm is the most basic $O(n^2)$ checking of every single node pair $(u, v)$, and also has $O(n^2)$ memory requirement. The basic steps are:
+Our algorithm is the most basic $O(n^2)$ checking of every single node pair $(u, v)$, and also has $O(n^2)$ memory requirement, and doesn't scale in $d$ beyond a linear factor inherent in operating with d-dimensional points. The basic steps are:
 \begin{enumerate}
     \item sample $O(n)$ node weights $w_u$ from a power law distribution
     \item sample $O(n)$ node locations $x_u$ from a uniform distribution on the torus
