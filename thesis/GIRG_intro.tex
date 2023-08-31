@@ -68,26 +68,24 @@ The normalising factor $W^{-1}$, where $W = \sum_{u \in V} w_u$, ensures that th
 
 
 \subsection{Geometry}
-The geometric space $\chi$, and the distance function $\norm{\cdot}$ (not necessarily a norm) can vary a great deal without affecting key properties of GIRGs.
+The geometric space $\chi$, along with the distance function written $r(\vec{x}_u, \vec{x}_v) = \norm{x_u - x_v} = r_{uv}$ (which is not necessarily a norm, or even a metric), can vary a great deal without affecting key properties of GIRGs.
 
-The edge probability $p_{uv}$ has a geometric factor from the distance $r_{uv} = r(\vec{x}_u, \vec{x}_v) = \norm{x_u - x_v}$.
-This inversely scales the probabilities so that nearby points (small $r_{uv}$) are more likely to have an edge than those further apart.
-Depending on the space $\chi$ and the function $r$ chosen, it may be a norm, a metric, or not even.
-$r_{uv}$ is taken to the dth power so that the number of edges is consistent across different values of $d$.
-Such proximity influenced $p_{uv}$ is one way of bringing about the phenomenon of \textit{clustering}, common in many real life graphs, whereby subgroups of nodes might have more edges within themselves than expected by chance.
+The edge probability $p_{uv}$ incorporates a geometric factor from the distance $r_{uv}$, which inversely scales the probabilities so that nearby points (small $r_{uv}$) are more likely to have an edge than those further apart.
+$r_{uv}$ is raised to the dth power to ensure consistency in the number of edges across different values of $d$.
+This influence in GIRGs of node proximity on $p_{uv}$ facilitates the emergence of \textit{clustering}, a common phenomenon in many real-world graphs, where subgroups of nodes might have more internal edges than would be expected by chance.
 
 
 
 % The geometric space $\chi$, and the distance function $\norm{\cdot}$ (not necessarily a norm) can vary a great deal without affecting the key properties of GIRGs. $\chi = \T^d$ the d-dim torus is very handy for proofs, as the viewpoint of any node $x_u$ is equivalently at the "centre" of the space. For real applications the d-dim cube $\chi = [0, 1]^d$ can be more realistic; however it is no longer symmetric; nodes with locations near the edge of the cube are different from those near the centre.
 
-Taking the distance function as the max norm, i.e. $\norm{\vec{x}} = \norm{\vec{x}}_\infty = \max_i |x_i|$ is also nice for proofs, but can be replaced by euclidean or other norms - by the equivalence of norms there isn't much difference. Note on the torus the max norm isn't strictly a norm, rather we abuse notation to write:
+Using the max norm as the distance function, i.e., $\norm{\vec{x}} = \norm{\vec{x}}_\infty = \max_i |x_i|$, is convenient for proofs, but can be replaced by euclidean or other norms - the equivalence of norms there is not much difference. Note that on the torus, the max norm is not strictly a norm, rather we abuse notation to express:
 \begin{align}
     ||\vec{x} - \vec{y}||_\infty &= \max_i |x_i - y_i|_C\\
-     |x_i - y_i|_C :&= \min(|x_i - y_i|, 1 - |x_i - y_i|)
+    |x_i - y_i|_C :&= \min(|x_i - y_i|, 1 - |x_i - y_i|)
 \end{align}
-The \textit{minimum component distance} (MCD) defined as $\norm{x}_{\mathrm{mcd}} = \min_i |x_i|$ doesn't even satisfy the triangle inequality, but still retains most of the GIRG properties. This can make sense if we want two nodes to have a higher edge probability if they are close in at least one dimension, rather than every dimension.
+The \textit{minimum component distance} (MCD), defined as $\norm{x}_{\mathrm{mcd}} = \min_i |x_i|$, does not even satisfy the triangle inequality, yet it preserves most properties of GIRGs. This distance function is reasonable if we desire two nodes to have a higher edge probability if they are close in at least one dimension, rather than in every dimension.
 
-$\alpha \in (1, \infty]$ is another parameter affecting the geometry. The edge probability formular distinguishes \textit{short edges} where $r_{uv} < (w_u w_v / W)^{1/d}$ and $p_{uv} = \Theta(1)$ (for these the $\min(\cdot, 1)$ takes affect to ensure $p_{uv} \leq 1$), and \textit{long edges} where $r_{uv} > (w_u w_v / W)^{1/d}$, and $p_{uv}$ decays to zero with increasing distance. Larger values of $\alpha$ speed this decay, so more strongly restrict the number of longer distance edges. $\alpha=\infty$ enforces a sharp cutoff to $p_{uv} = 0$ for long edges.
+$\alpha \in (1, \infty]$ is a parameter that impacts the affect of geometry on edge probabilites. We differentiate between \textit{short edges} where $r_{uv} < (w_u w_v / W)^{1/d}$ and $p_{uv} = \Theta(1)$ (for these, the $\min(\cdot, 1)$ is applied to ensure $p_{uv} \leq 1$), and \textit{long edges}, where $r_{uv} > (w_u w_v / W)^{1/d}$, and $p_{uv}$ diminishes to zero as the distance increases. Larger values of $\alpha$ accelerate this decay in long edge probability, thus more severely limiting the number of long-distance edges. $\alpha=\infty$ imposes a strict cutoff, setting $p_{uv} = 0$ for long edges.
 
 % The reason for the power of $d$ in $r_{uv}^d$ is to keep the edge probabilties equivalent with respect to the volume of space in different dimensions.
 % The more general formula replaces replaces $||x_u - x_v||^d = r_{uv}^d$ with $Vol(B_r)$ the volume of the ball of radius $r=r_{uv}$.
@@ -96,15 +94,20 @@ $\alpha \in (1, \infty]$ is another parameter affecting the geometry. The edge p
 % Volumetric equivalence makes sense in that the edge probability $p_{uv} | x_u, w_u, w_v$ in the Torus is determined by integrating $\int_{r=0}^{r=1} p_{uv}(r) p(r) dr = \int_{Vol=0}^{Vol=1} p_{uv}(Vol) dVol$, where $Vol(r) = Vol(B_r)$ is the volume of the ball of radius $r$.
 % Hence across different GIRGs of different dimensions $d$, keeping $p_{uv}(Vol)$ the same function therefore keeps the pairwise edge probabilities $p_{uv}$ the same (but not the joint edge probability distribution of course).
 
-\subsection{Similarity to Chung-Lu} 
-A key property of the GIRG model is that it's a geometic variant of the Chung-Lu model. The Chung-Lu model decrees edge probabilities between nodes for a given node weight sequence $(w_u)_{u \in V}$ as $p_{uv} = \Theta(\min\{1, \frac{w_u w_v}{W}\})$.
+\subsection{Similarity to Chung-Lu}
+A key property of the GIRG model is its nature as a geometric variant of the Chung-Lu model. In a Chung-Lu generated graph, edge probabilities between nodes for a given node weight sequence $(w_u)_{u \in V}$ are decreed as $p_{uv} = \Theta(\min\{1, \frac{w_u w_v}{W}\})$.
 
 
-In a GIRG, geometry influences edge proabilities, however when you consider any two nodes $u,v$, marginalising over all of their possible locations (whether they're close by or far apart), you get $E_{x_v}[p_{uv} | x_u, w_u, w_v] = \Theta(\min\{1, \frac{w_u w_v}{W} \})$, precisely like Chung-Lu just forgetting node locations $(\vec{x}_u)_{u \in V}$.
+In a GIRG, geometry affects edge probabilities, yet when considering any two nodes $u,v$, marginalising over all possible locations (whether near or far) yields $E_{x_v}[p_{uv} | x_u, w_u, w_v] = \Theta(\min\{1, \frac{w_u w_v}{W} \})$, which mirrors the Chung-Lu model and disregards node locations $(\vec{x}u){u \in V}$.
 
-Therefore properties/results about Chung-Lu generated graphs carry through automatically to GIRGs, such as the fact that $E[d_u] = \Theta(w_u)$ - the expected degree of a node $u$ with weight $w_u$ is proportional to $w_u$.
+Therefore, properties and results pertaining to graphs generated by the Chung-Lu model are directly applicable to GIRGs, such as the fact that $E[d_u] = \Theta(w_u)$ - the expected degree of a node $u$ with weight $w_u$ is proportional to $w_u$.
 
-This seems strange as we have the $(w_u w_v / W)^\alpha$ term in the edge probabilities, however as introduced above, $\alpha$ only affects the decay rate of edge probabilities for long edges, which is only a constant fraction of total edge probability, as long as $\alpha > 1$. If $\alpha$ were smaller we would actually blow up the degree $d_u$ far beyond $w_u$, as the large number of potential long edges would have too many realised as actual edges, and dominate the short edges.
+This might appear counterintuitive, given the presence of the $(w_u w_v / W)^\alpha$ term in the edge probabilities. However, as previously discussed, $\alpha$ only affects the decay rate of edge probabilities for long edges, which constitute only a constant fraction of the total edge probability, provided $\alpha > 1$. If $\alpha$ were smaller, it would blow up the degree $d_u$ far beyond $w_u$, as the abundance of potential long edges would result in too many being realised as actual edges, so would dominate the number of short edges.
+
+
+
+
+
 
 % For this to hold we actually need to have $\alpha > 1$. - otherwise there are too many long distance edges. Essentially $\alpha > 1$ depresses the number of long distance edges to be $\Theta(\min\{1, \frac{w_u w_v}{W} \})$. No matter how large $\alpha$ is, there will always be $\Theta(\min\{1, \frac{w_u w_v}{W} \})$ short distance edges: $u \sim v$ where $p_{uv} = 1$.
 
