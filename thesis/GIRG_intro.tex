@@ -277,16 +277,16 @@ Our algorithm is the most basic $O(n^2)$ checking of every single node pair $(u,
 
 \section{Cube GIRGs}
 
-Cube GIRGs are an alternative formulation to Toroidal GIRGs. Instead of the $d$-dimensional torus $\chi = \mathbb{T}^d$, we have the $d$-dimensional cube $\chi = [0,1]^d$. Thus the tradeoff is to lose the symmetry and simplicity of the torus, for the ability to hopefully generate more realistic graphs, as few situations in the real world are Toroidal.
+Cube GIRGs are an alternative formulation to Toroidal GIRGs. Instead of the $d$-dimensional torus $\chi = \mathbb{T}^d$, we have the $d$-dimensional cube $\chi = [0,1]^d$. Thus, the tradeoff is to lose the symmetry and simplicity of the torus for the ability to hopefully generate more realistic graphs, as few situations in the real world are toroidal i.e. with features that wrap around in the way that a torus does.
 
 % For example with our socfb social network graphs, likely geometric quantities are home address (as a 2d vector location - these networks are from a small town/city/university - only on planet earth scale do geographic locations become somewhat more toroidal), political leaning (typically a 2d axis of economic left/right, and authoritarian/libertarian - e.g. an extreme authoritarian is unlikely to get along with an extreme libertarian), athletic proclivity etc. all generally are non toroidal. Perhaps one toroidal-esque quantity could be that in all cases, a pair of positive and negataive far out leaning people share in common their marginalisation / non conventionality - this could potentialily be captured on a 1D non toroidal normie vs hipster scale.  
 
-For example with our socfb social network graphs, likely geometric features for each individual are home address, age, athletic proclivity, political leaning etc.
-In the environ of a town/city, home address is a 2D vector
-\footnote{Only on the whole planet scale would home address look more torus like - strictly speaking a 3d sphere, or perhaps a cylinder if you assume that nobody lives near to the North/South Pole}.
-Age and athleticisim are clearly both non toroidal (and hence cube like) quantities.
-Political leaning could be e.g. a 2d axis of economic left/right and authoritarian/libertarian. This might bear a toroidal-esque characterisation whereby two individuals on far opposite extremes of an axis share some common ground, e.g. a hardcore communist and a fascist might both share values such as railing against the status quo, or enjoying political rallies.
-No model is perfect; this could potentially be captured as an extra (non toroidal) feature dimension placing individuals on a scale of normie to hipster.
+For example in our socfb social network graphs, likely geometric features for each individual could be home address, age, athletic proclivity, political leaning, etc.
+In the environ of a town/city, home address is a 2d vector\footnote{Only on the whole planet scale would home address look more torus like - strictly speaking a 3d sphere, or perhaps a cylinder if you assume that nobody lives near to the North/South Pole}.
+Age and athleticism are clearly both non-toroidal (and hence cube-like) quantities.
+Political leaning could be, e.g., a 2d axis of economic left/right and authoritarian/libertarian.
+This might bear a toroidal-esque characterisation whereby two individuals on far opposite extremes of an axis share some common ground, e.g., a hardcore communist and a fascist might both share values such as railing against the status quo or enjoying political rallies.
+No model is perfect; this could potentially be captured as an extra non-toroidal feature dimension placing individuals on a scale from mainstream to unconventional.
 
 \subsection{Cube GIRG Formulation}
 The neat correspondence between volume and distance unfortunately breaks down when translating from torus GIRGs to cube GIRGs, due to the loss of spatial symmetry.
