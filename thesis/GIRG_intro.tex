@@ -28,35 +28,35 @@ To support all objectives, we also cover the different types of GIRGs and their 
 \minitoc
 \section{GIRGs definition}
 \label{sec:GIRG_def}
-We outline the key elements of GIRGs, the main variant types of GIRG, and how they fit into the wider context of random graph models.
+In this section, we define GIRGs and identify their key features.
 
-The GIRG definition according to \cite{bringmann2019geometric} is a random graph model defined by the edge connection probabilities
+As per \cite{bringmann2019geometric}, the GIRG model is a random graph model characterized by the edge connection probabilities given by the formula:
 
 % TODO below (div by n, infty norm) is what I had before, but in fact bringmann2019geometric uses below with div by W and ambiguous norm.
 % \begin{equation}
-%     p_{uv} = \Theta \left ( \min \left \{ 
+%     p_{uv} = \Theta \left ( \min \left \{
 %         1,
 %         c \left (
 %             \frac{w_u w_v / n}{ \norm{x_u - x_v}_\infty^d}
-%         \right )^\alpha    
+%         \right )^\alpha
 %     \right \}
 %     \right )
 % \end{equation}
 
 \begin{equation}
-    p_{uv} = \Theta \left ( \min \left \{ 
+    p_{uv} = \Theta \left ( \min \left \{
         1,
         \left (
             \frac{w_u w_v / W}{\norm{x_u - x_v}^d}
-        \right )^\alpha    
+        \right )^\alpha
     \right \}
     \right )
 \end{equation}
 
-where $(w_u)_{u \in V}$ are node specific weights and $(x_u \in \chi)_{u \in V}$ are positions in some geometric space $\chi$, generally taken to be the d-dimensional torus
-\footnote{The d-dim torus also looks like $[0, 1]^d$, however opposite faces of the cube are identified. Think Pacman. Or donuts. Just not Pacman eating a donut...}
+Here, $(w_u)_{u \in V}$ are node-specific weights in $\R^+$, and $(x_u \in \chi)_{u \in V}$ denote positions of nodes in a particular geometric space $\chi$, often taken to be the d-dimensional torus
+\footnote{The d-dimensional torus also resembles $[0, 1]^d$, but opposite faces of the cube are identified. Picture Pac-Man, or donuts. Just not Pac-Man eating a donut...}
 $\T^n$, or the d-dimensional unit cube $[0, 1]^d$.
-The normalising factor of $W^{-1}$ where $W = \sum_{u \in V} w_u$ ensures that the expected degree of a node $u$ is unchanged even as $n \to \infty$; though $u$ will have more possible other nodes to connect to, this is counterbalanced by the diminshing probability of connecting to any one.
+The normalising factor $W^{-1}$, where $W = \sum_{u \in V} w_u$, ensures that the expected degree of a node $u$ remains constant even as $n \to \infty$; although $u$ will have more possible other nodes to connect with, this increase is counterbalanced by the declining probability of connecting to any one of them.
 
 
 % This edge probability has a geometric factor from the distance $r_{uv} = \norm{x_u - x_v}_\infty$, which is taken to the dth power so that the number of edges is consistent across different values of $d$.
