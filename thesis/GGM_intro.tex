@@ -3,11 +3,11 @@
 \minitoc
 
 
-\cite{blasius2018towards} presents a general framework that can be used to assess the ability of a \textit{generative graph model (GGM)} to simulate a set of real graphs of interest. They demonstrate their method on a few common GGMs: \textit{Erdos-Renyi (ER)}, \textit{Barabasi-Albert (BA)} preferential attachement graphs, \textit{Chung-Lu} and \textit{Hyperbolic Random graphs}. The real graph dataset which they attempt to simulate is a set of 219 real-world networks taken from the \textit{Network Repository} (\url{https://networkrepository.com/}, \cite{rossi2015network}).
+\cite{blasius2018towards} presents a general framework that can be used to assess the ability of a \textit{generative graph model (GGM)} to simulate a set of real graphs of interest. They demonstrate their method on a few common GGMs: \textit{Erdos-Renyi (ER)}, \textit{Barabasi-Albert (BA)} preferential attachement graphs, \textit{Chung-Lu} and \textit{Hyperbolic} random graphs. The real graph dataset which they attempt to simulate is a set of 219 real-world networks taken from the \textit{Network Repository} (\url{https://networkrepository.com/}, \cite{rossi2015network}).
 
-Their framework assesses realism of a GGM by using it to produce a dataset of fake graphs. A metric of distinguishability of fake and real datasets based on a select few graph statistics is produced: training a binary classifier of graph \textrightarrow fake/real using the combined fake and real graph datasets as training data, the accuracy of this classifier signifies real/fake distinguishability.
+Their framework assesses realism of a GGM by using it to produce a dataset of fake graphs. A metric of distinguishability of fake and real datasets based on a select few graph statistics is produced: training a binary SVM classifier of graph \textrightarrow fake/real using the combined fake and real graph datasets as training data, the accuracy of this classifier signifies real/fake distinguishability.
 
-\cite{blasius2018towards} found poor realism of the tested models on the $\sim 100$ strong subset of the real-world graphs that were Facebook social networks. We however will use the framework to specifically test different types of GIRGs' realism on this tough subset, with the hope that they will do better than the best models of \cite{blasius2018towards} - Chung-Lu and Hyperbolic. We also think that restricting to this one subset of what should be similar types of real-world graphs will more clearly distinguish our different GIRG types.
+\cite{blasius2018towards} used their framework on a wider range of real-world graphs, but in particular found poor realism of the tested models on the $\approx 100$ strong subset of Facebook social networks that we focus on. We will use the framework to specifically test different types of GIRGs' realism on this tough subset, with the hope that they will do better than the previous best models - Chung-Lu and Hyperbolic. We also think that restricting to this one subset of what should be similar types of real-world graphs will allow clearer differentiation between different GGMs.
 
 % Hence realism is evaluated on the chosen few graph statistics (e.g. mean node degree in a graph, or graph diameter), and at a higher collection level, which helps to 
 
@@ -18,46 +18,47 @@ Their framework assesses realism of a GGM by using it to produce a dataset of fa
 
 
 \section{GGM and Framework Mathematical Outline}
-A graph $G = (V,E)$ is said to be randomly generated from a GGM $\cG$, written $G \sim \cG$. Most of our GGMs are simple and can be described by a small number of parameters. For example for the Erdos-Renyi GGM, $G \sim \cG_{ER}(n, p)$ means that there are $n$ nodes: $V=[n]$, and each potential edge $(u,v)$ exists iid with probability $p$. We write this as $P(u \sim v) = p$.
+A graph $G = (V,E)$ is said to be randomly generated from a GGM $\cG$, written $G \sim \cG$. Most of our GGMs are simple and can be described by a small number of parameters. For example for the Erdos-Renyi GGM, $G \sim \cG_{ER}(n, p)$ means that there are $n$ nodes: $V=[n]$, and each potential edge $(u,v)$ exists iid with probability $p$, i.e. $p(u \sim v) = p$.
 
 \subsection{Fitting a GGM to a particular real graph instance}
 \label{sec:fitting_GGM}
 \q{Fitting} a GGM to a real graph $G$ means finding the most plausible $\hat{\theta}$ in the hypothetical world where $G$ was produced via $G \sim \cG(\hat{\theta})$. Hence for our ER GGM example, choosing $\hat{n} = |V|$ is a no-brainer, and $\hat{p} = |E| / \binom{n}{2}$ follows by fitting the expected number of edges.
 
-Fitting $\hat{\theta}$ can also be done by likelihood estimation. This is tractable for the Erdos-Renyi GGM, by solving $\argmin_p \sum_{u \neq v} \log(p^{e_{uv}}) + \log((1-p)^{1 - e_{uv}}))$, which gives the same $\hat{p}$ as above. For GIRGs however, this would be intractable: for example we cannot even easily integrate over all possible point locations in the geometric space:
+Fitting $\hat{\theta}$ can also be done by likelihood estimation. This is tractable for the Erdos-Renyi GGM, by solving $\argmin_p \sum_{u \neq v} e_{uv} \log(p) + (1 - e_{uv}) \log( 1 - p)$, where $e_{uv}$ is the edge indicator function, which gives the same $\hat{p}$ as above. For GIRGs however, this would be intractable: for example we cannot even easily integrate over all possible point locations in the geometric space:
 
 \begin{equation*}
     p(G | \alpha, \vec{w}, d) = \int_{\vec{x}_1 \in [0,1]^d} \cdots \int_{\vec{x}_n \in [0,1]^d} p(G | \alpha, (\vec{x}_i)_{i=1}^n) \prod_{i=1}^n p(\vec{x}_i)
 \end{equation*}
 
-Instead we can use a heuristic method based on Approximate Bayesian Computation (ABC). We seek the parameter $\hat{\theta}$ that minimises the expected distance $ \E[\delta(G, G' \sim \cG(\theta))]$ for some distance metric $\delta$. For $\delta$ to be effective, ideally it would be something like $(f(G) - f(G'))^2$, for $f$ a sufficient statistic of $\theta$. In practice this looks like an algorithm where we repeatedly sample $\theta$ from a prior; use it to generate $G'$; see if $f(G') \approxeq f(G)$, and if so keep $\theta$ as a candidate for $\hat{\theta}$.
+Instead we can use a heuristic method based on \textit{Approximate Bayesian Computation (ABC)}. We seek the parameter $\hat{\theta}$ that minimises the expected distance $ \E[\delta(G, G' \sim \cG(\theta))]$ for some distance metric $\delta$. This basically means that the GGM parametrised by $\hat{\theta}$ successfully generates graphs $G'$ that look similar to our given graph $G$.
+For $\delta$ to be effective, ideally it would be something like $(f(G) - f(G'))^2$, for $f$ a sufficient statistic of $\theta$. In practice this looks like an algorithm where we repeatedly sample $\theta$ from a prior; use it to generate $G'$; see if $f(G') \approxeq f(G)$, and if so keep $\theta$ as a candidate for $\hat{\theta}$.
 
 \subsection{Plausibility of Fitted GGMs}
 
-Similarly to the use of a statistic $f$ of real and generated graphs as a proxy for fitting $\hat{\theta}$, we can also use other high level statistics $\fclass$ to evaluate the plausibility of a fitted GGM as to whether it could have produced the real graph $G$.
+Similarly to the use of a statistic $f$ of real and generated graphs as a proxy for fitting $\hat{\theta}$, we can also use other high level statistics $\fclass$ to evaluate the plausibility of a fitted GGM as to whether it could have produced the real graph $G$. We will later use these as the input features to the real/fake binary classifier, hence the notation.
 
-Having fit $\hat{\theta}$ of the GGM, we can then sample graphs $G' \sim \cG(\hat{\theta})$ which are hypothetically similar to $G$. We can only hope for similarity on the global level, as even in the best case scenario where both $G, G' \sim \cG(\hat{\theta})$, due to the inherent randomness of the GGM, we cannot expect individual edges to matchup e.g. $e \in E \iff e \in E'$, let alone to be able to identify nodes in $G$ with those in $G'$ - see \cref{chap:graph_kernels} for more on graph similarity.
+Having fit $\hat{\theta}$ of the GGM, we can then sample graphs $G' \sim \cG(\hat{\theta})$ which are hypothetically similar to $G$. We can only hope for similarity on the global level. Even in the best case scenario where both $G, G' \sim \cG(\hat{\theta})$, there is no local identification of nodes and edges, e.g. we cannot expect  $e \in E \iff e \in E'$ - see \cref{chap:graph_kernels} for more on graph similarity.
 
-For example in the Erdos-Renyi exact fit case, in the best case scenario we have $G \sim \cG_{ER}(n, p^*)$ and $G' \sim \cG_{ER}(n, \hat{p} = p^* + \epsilon)$. Although there will be some small estimation error $\epsilon$ in the fit parameter (which may be biased to be non-zero if e.g. $G$ randomly has $|E|$ differing from $p^* {n \choose 2}$), we've explicitly fit for the high level statistic of the number of edges, s.t. $|E| = \E[|E'|] = \hat{p} \binom{n}{2}$, and $|E'| \approxeq |E|$ with some small variance. For other (not fit) high level statistics $\fclass$ like the effective diameter of the graph, their expected value will close to that of the real graph, $E_{G' \sim \cG(\hat{\theta})}[\fclass(G')] \approxeq \fclass(G)$, and likewise concentrated with small variance s.t. $\fclass(G') \approxeq \fclass(G)$.
+For example in the Erdos-Renyi exact fit case, in the best case scenario we have $G \sim \cG_{ER}(n, p^*)$ and $G' \sim \cG_{ER}(n, \hat{p} = p^* + \epsilon)$. Although there will be some small estimation error $\epsilon$ in the fit parameter (which may be biased to be non-zero if e.g. $G$ randomly has $|E|$ differing from $p^* {n \choose 2}$), we've explicitly fit for the high level statistic of the number of edges, s.t. $|E| = \E[|E'|] = \hat{p} \binom{n}{2}$, and $|E'| \approxeq |E|$ with some small variance. For other (not fit) high level statistics $\fclass$ like the effective diameter of the graph, their expected value will be close to that of $G$, $E_{G' \sim \cG(\hat{\theta})}[\fclass(G')] \approxeq \fclass(G)$, and likewise concentrated with small variance s.t. $\fclass(G') \approxeq \fclass(G)$.
 
 
-Furthermore if we were to generate a whole list of graphs $G'_1, \dots, G'_m$ from $\cG(\hat{\theta})$, assuming the matching GGM hypothesis, we would not expect $G$ to stand out from the crowd. Essentially $\fclass(G'(G)) \sim \fclass$ should follow a distribution with $\fclass(G)$ close to its median/mean.
+Furthermore if we were to generate a whole list of graphs $G'_1, \dots, G'_m$ from $\cG(\hat{\theta})$, assuming the matching GGM hypothesis, we would not expect $G$ to stand out from the crowd. Essentially the random variable $\fclass(G'(G))$ should follow a distribution with $\fclass(G)$ not too far from the mean/median, in an empirical p-value sense.
 
 
 \subsection{Fitted GGMs as candidates for real graphs - Blasius}
 \label{sec:ggm_blasius_framework}
 \cite{blasius2018towards} takes this method one step further. They are essentially evaluating the hypothesis that the set of real graphs $G_1, ..., G_k$ are generated from a particular GGM $\cG$, but with differing parameters: $G_1 \sim \cG(\theta^*_1), ..., G_k \sim \cG(\theta^*_k)$. Perhaps $\theta^*_i$ come from some prior distribution $p(\theta)$.
 
-They again fit individual $\hat{\theta}_i$ with which to generate one $G'_i \sim \cG(\hat{\theta}_i)$ per real graph $G_i$. This way instead of, for each real graph, comparing multiple $G'_{ij}$ to $G_i$ and averaging, they can compare the set of graphs $\{G_i\}_{i=1}^k$ to $\{G'_i\}_{i=1}^k$. Graph comparison is done by comparing a wide number of statistics/metrics computed for each graph. These are input as a whole feature vector $\vec{f}^\mathrm{class}(G)$ to an SVM classifier, which is trained to classify membership of the real or generated dataset. These features are statistics such as the number of nodes, average node degree, centrality, closeness, diameter, clustering coefficient and so on.
+They again fit individual $\hat{\theta}_i$ with which to generate one $G'_i \sim \cG(\hat{\theta}_i)$ per real graph $G_i$. This way instead of, for each real graph, comparing multiple $G'_{ij}$ to $G_i$ and averaging, they can compare the set of graphs $\{G_i\}_{i=1}^k$ to $\{G'_i\}_{i=1}^k$. Graph comparison is done by comparing a wide number of statistics/metrics computed for each graph. These are input as a whole feature vector $\vec{f}^\mathrm{class}(G)$ to an SVM classifier, which is trained to classify membership of the real or generated dataset. These features are statistics such as the number of nodes, mean node degree, mean node closness centrality, graph diameter and so on.
 
-Aggregating the classification over the whole dataset of real graphs allows a
 
-We suggested in the previous section that multiple $G'_{ij}$ could be generated per real graph $G_i$ - this would reduce the variance of the whole process. This is also necessary to be able to train a classifier on an individual real graph basis, as you cannot do binary classification on just a pair of feature vectors $\vec{f}^\mathrm{class}(G_i)$ and $\vec{f}^\mathrm{class}(G'_i)$. Blasius instead aggregates the classification over the whole dataset of real graphs, allowing sufficient datapoints to train a classifier while reducing the overall necessary computation ($k$ generated graphs produced instead of $km$).
+Performing this classification task over the whole dataset of graphs allows for a GGM realism evaluation without needing to have the additional computation of generating multiple $G'_{ij}$ for each real graph $G_i$, which would have given a more detailed graphwise GGM realism metric. There is an added benefit of helping to cover for GGM parameter fitting inaccuracy. If $\hat{\theta}_i = \theta^*_i + \epsilon_i$, it may still be possible to distinguish $G_i$ from $\{G'_{ij}\}_{i=1}^m$ due to the $\epsilon_i$ fitting error. If instead we compare the set $\{\theta^*_i\}_{i=1}^k$ to $\{\hat{\theta}_i\}_{i=1}^k$, Now each $\hat{\theta}_i \neq \theta^*_i$, but still well fits into the distribution of $\{\theta^*_i\}_{i=1}^k \sim p(\theta)$. Finally having one $G'_i$ per real graph $G_i$ also simplifies the binary classification task by having a balanced dataset.
 
-This also has the added benefit of helping to cover for GGM parameter fitting inaccuracy. If $\hat{\theta}_i = \theta^*_i + \epsilon_i$, it may still be possible to distinguish $G_i$ from $\{G'_{ij}\}_{i=1}^m$ due to the $\epsilon_i$ fitting error. If instead we compare the set $\{\theta^*_i\}_{i=1}^k$ to $\{\hat{\theta}_i\}_{i=1}^k$, Now each $\hat{\theta}_i \neq \theta^*_i$, but still well fits into the distribution of $\{\theta^*_i\}_{i=1}^k \sim p(\theta)$. Finally having one $G'_i$ per real graph $G_i$ also simplifies the binary classification task by having a balanced dataset.
+% We suggested in the previous section that multiple $G'_{ij}$ could be generated per real graph $G_i$ - this would reduce the variance of the whole process. This is also necessary to be able to train a classifier on an individual real graph basis, as you cannot do binary classification on just a pair of feature vectors $\vec{f}^\mathrm{class}(G_i)$ and $\vec{f}^\mathrm{class}(G'_i)$. Blasius instead aggregates the classification over the whole dataset of real graphs, allowing sufficient datapoints to train a classifier while reducing the overall necessary computation ($k$ generated graphs produced instead of $km$).
+
 
 % This gives us a mirrored real/fake graph features dataset: $\{\vec{\fclass}_i (G)  = \vec{\fclass}(G_i)$ for feature vector function $\vec{\fclass}$, against $\vec{\fclass}_i$.
-For the SVM classifier trained on the mirrored real/fake graph dataset, it will have close to 50\% accuracy if really $G_i \sim \cG(\theta^*_i)$, and higher accuracy if instead $G_i \sim \tilde{\cG}(\phi^*_i)$ some alternative GGM $\tilde{\cG}$.
+The output of the Blasius framework, for a given GGM and classification feature vector $\fclass$, is a real/fake accuracy percentage. If it were really the case that the input real-graphs were generated from $G_i \sim \cG(\theta^*_i)$ of the same GGM $\cG$ as the fitted fake graphs, the SVM should be able to acheive only close to $50\%$ accuracy, as real and fake $\fclass$ should be hard to tell apart. Higher accuracies denote distinguishability of real from fake - occuring if instead $G_i \sim \tilde{\cG}(\phi^*_i)$ for some alternative GGM $\tilde{\cG}$.
 
 
 % Contextually, GIRGs are compared with other generative graph models: Erdos-Renyi (ER), Barabasi-Albert (BA) preferential attachement graphs, Chung-Lu and hyperbolic graphs.
@@ -78,16 +79,17 @@ For the SVM classifier trained on the mirrored real/fake graph dataset, it will 
 
 
 \section{Fitting GIRG GGM to a real graph}
+The GGM parameters of the GIRG model $\cG_{\GIRG}(\theta)$ are $\theta = (n, d, c, \alpha, \tau)$. For the Blasius framework we need to fit $\hat{\theta}$ to a given real graph $G$, as the best estimate for the parameters that would have generated $G \sim \cG_{\GIRG}(\theta)$. The problem of fitting dimension $d$ is a tricky one that we touch on briefly in \cref{chap:diff_maps}. We also attempted to use \textit{graph fractal dimension} to infer $d$ without success. We instead avoid the problem by treating 1d, 2d, 3d etc. GIRGs as separate GGMs, to be individually fitted and inter-compared.
 
 \subsection{Fitting number of nodes $n$}
 
-We follow \cite{blasius2018towards} which first preprocesses the graph $G$ by shrinking it to its largest connected component, i.e. $G \gets \shrinktogcc(G)$
+We follow \cite{blasius2018towards} which first preprocesses the graph $G$ by shrinking it to its largest connected component, $G \gets \shrinktogcc(G)$
 before fitting $\cG$ to it. Then $n$ is just the number of remaining nodes.
 
 
 % This is not because the GIRG model always generates connected graphs, which is not true. 
 
-Blasius' rational is that where some real graphs in our dataset have disconnected subgraphs, this may be due to them being a concatenation of a few distinctly generated subraphs, which may not collectively fall under the GIRG model. All of our GGMs are capable of producing a bunch of disconnected subgraphs, however this is most likely to occur in our geometric GGMs which exhibit clustering; GIRGs do at least whp produce a unique giant component - one with a linear number of nodes. Hence for a fair comparison $d(G, G')$, we also need to post-process the GGM generated $G' \gets \shrinktogcc(G')$. 
+Blasius' rational is that where some real graphs in our dataset have disconnected subgraphs, this may be due to them being a concatenation of a few distinctly generated subraphs, hence a GGM should be fit just to one subgraph (the largest - the rest are discarded for potentially being too small). All of our GGMs are capable of producing a bunch of disconnected subgraphs, however this is most likely to occur in our geometric GGMs which exhibit clustering; GIRGs do at least whp produce a unique giant component - one with a linear number of nodes. Hence for a fair comparison $d(G, G')$, we also need to post-process the GGM generated $G' \gets \shrinktogcc(G')$. 
 
 Blasius's only geometric model is Hyperbolic Random Graphs, for which they use a fitting algorithm that actually estimates a higher number of nodes $n > |V|$ in order to approximately have the largest connected component of $G' \sim \cG$ be of size $|V|$.
 We don't do this for our GIRGs however, as we find this algorithm prone to error, and unnecessary, at least for the socfb Facebook graphs - see \cref{tab:blasius_HRG_n_fitting_renunciation}. We accept instead that our GGMs may end up with slightly fewer nodes than the real graphs, and hope that this doesn't affect the SVM classification too much.
@@ -169,9 +171,9 @@ Note that GIRGs might still do the best job, compared to other non geometric GGM
 
 
 \subsection{Fitting power law distribution exponent $\tau$ for node weight sampling}
-We fit $\tau$ to the tail of the \textit{degree distribution} of $G$, using the python package $\PLP$. Using this fit parameter we are enabled to generate new weight sequences $w_u \sim \powerlaw(\tau)$ for sampling new GIRGs $G' \sim \cG_{\GIRG}(\tau,...)$.
+We fit $\tau$ to the tail of the \textit{degree distribution} of $G$, using the python package $\PLP$. Having this fit parameter enables subsequent generation of new weight sequences $w_u \sim \powerlaw(\tau)$ for sampling new GIRGs $G' \sim \cG_{\GIRG}(\tau,...)$.
 
-\paragraph{The degree distribution} of the graph $G$ is defined as $dd(x) := \frac{|\{v \in V: d(v) = x\}|}{|V|}$, i.e. the fraction of nodes with degree $x$. For graphs generated by the GIRG model, we saw that the geometry marginalisation property means that $E[d_u] \propto w_u$. Hence if node weights are distributed following $\powerlaw(\tau)$, we expect to see the tail of the degree distribution, $dd(x)$ as $x \to n$ to look like a discrete power law distribution $dd(x) \propto x^{-\tau}$.
+\paragraph{The degree distribution} of the graph $G$ is defined as $dd(x) := \frac{|\{v \in V: d(v) = x\}|}{|V|}$, i.e. the fraction of nodes with degree $x$. For graphs generated by the GIRG model, we noted that the geometry marginalisation property means that $E[d_u] \propto w_u$. Hence if node weights are distributed following $\powerlaw(\tau)$, we expect to see the tail of the degree distribution, $dd(x)$ as $x \to n$ to look like a discrete power law distribution $dd(x) \propto x^{-\tau}$.
 
 \paragraph{Sketch of why GIRG power law weights \textrightarrow\ power law degree distribution}  
 % that $dd(x) \approxeq P(d_u = x) \approxeq P(w_u = x) \propto x^{-\tau}$.
@@ -181,7 +183,7 @@ For a fixed weight $w_u$, node degree $d_u$ closely follows a binomial distribut
     P(d_u = x) = \int P(d_u = x | w_u = w) \Theta(w^{-\tau}) \,dw
 \end{equation}
 For sufficiently large $x$ (in the tail of the decaying distribution of $dd(x)$), the binomial distribution of mean and variance $w$ is sharply peaked around its mean: if $(x-w) > w^{1/2 + \epsilon}$ then $P(d_u = x | w_u = w) \approx 0$. 
-So essentially all the probability mass is on the region $[x - x^{1/2 + \epsilon}, x + x^{1/2 + \epsilon}]$, on which $\Theta(w^{-\tau}) \approx \Theta(x^{-\tau})$ doesn't change much at all as e.g. $(x - x^{1/2 + \epsilon})^{-\tau} = (x[1 - x^{-1/2 + \epsilon}])^{-\tau} \approxeq x^{-\tau}$ for large $x$.
+So essentially all the probability mass is on the region $[x - x^{1/2 + \epsilon}, x + x^{1/2 + \epsilon}]$, on which $\Theta(w^{-\tau}) \approx \Theta(x^{-\tau})$ (doesn't change much at all) as e.g. $(x - x^{1/2 + \epsilon})^{-\tau} = (x[1 - x^{-1/2 + \epsilon}])^{-\tau} \approxeq x^{-\tau}$ for large $x$.
 Hence $dd(x) \stackrel{n \to \infty}{\to} \Theta(x^{-\tau})$ for large $x$.
 
 
@@ -210,7 +212,7 @@ Hence $dd(x) \stackrel{n \to \infty}{\to} \Theta(x^{-\tau})$ for large $x$.
 % This means that $\E[d_u] = \Theta(w_u)$, and so $\E[dd(x)] = \E[ \frac{ \sum_u 1_{d_u = x}}{n}] = \E[d_u = x]$. This we can calculate as $\int_w P(w_u = w) P(d_u = x | w_u = w)dw = \int_w w^{-\tau} \PP(\Poisson(\Theta(w)) = x) dw$. It's essentially the inner product (integral of product) of two probability distributions, the first is $w^{-\tau}$, the second is a Gaussian looking like function with mean and variance $\Theta(w)$, and hence to first order the integral is $\Theta(w^{-\tau})$ (e.g. if you changed the gaussian integral to have the same mean $w$ but variance squeezed $\sigma^2 \to 1$ as to be like a delta function). It follows that for large $x$, $\E[dd(x)] = \Theta(x^{-\tau})$.
 
 \paragraph{powerlaw package fitting}
-Therefore if $G$ is a $\tau$ exponent power law weighted GIRG , we expect its degree distribution $dd(x)$ for large degrees $x$ to look like $dd(x) \propto x^{-\tau}$. Hence we can fit $\tau$ on this tail. \PLP does this by simultaneously finding a lower bound $x_{\min}$ for where in the tail the power law behaviour starts, and fitting $\tau$ to the region $x > x_{\min}$ using maximum likelihood estimation. The optimal $x_{\min}$ is chosen to minimise the Kolmogorov-Smirnov distance between the power law fit and the region's emprirical degree distribution.
+Therefore if $G$ is a $\tau$ exponent power law weighted GIRG , we expect its degree distribution $dd(x)$ for large degrees $x$ to look like $dd(x) \propto x^{-\tau}$. Hence we can fit $\tau$ on this tail. \PLP does this by simultaneously finding a lower bound $x_{\min}$ for where in the tail the power law behaviour starts, and fitting $\tau$ to the region $x > x_{\min}$ using maximum likelihood estimation\footnote{A visually much more compelling method of fitting the power law degree distribution tail is to plot the empirical degree distribution on a log-log scale, and literally draw a line of best fit on the heavy tail - $w^{-\tau}$ will look like a straight line with gradient $-\tau$. In fact one minus the empirical cdf is even better as it looks like $w^{1-\tau}$, so a similar log-log linear fit works to find $\tau$, and the plotted points are more robust to noise}. The optimal $x_{\min}$ is chosen to minimise the Kolmogorov-Smirnov distance between the power law fit and the region's emprirical degree distribution.
 
 Having fit $\tau$, we can then sample weights $w_u \sim \powerlaw(\tau)$.
 
@@ -232,9 +234,10 @@ Generating weights $w_u \stackrel{iid}{\sim} \powerlaw(\tau)$ is fine as a model
 % A sequence of weights with a constant q-tile of largest weights fitting into $\tau$ powerlaw tramlines fits the general GIRG formulation, but could still look quite different based on the distribution of the smaller weights.
 
 An easy improvement to better fit a specific real graph is to take the sequence of node degrees as weights
-\footnote{these are now all positive integers $\geq 1$ as opposed to real numbers $\geq x_{\min}$, since in the largest connected componenet, minimum degree is 1}.
+\footnote{these are now all positive integers $\geq 1$ as opposed to real numbers $\geq x_{\min}$, since in the largest connected componenet, minimum degree is 1}. Copying degrees as weights makes sense due to the Chung-Lu like property of having $E[d_u] \propto w_u$, whose correct scaling can be made correct by fitting $c$ as detailed in the next section. 
+% For the GIRG model however there is the added complication of node locations, whereby a node might have a higher degree than expected for its weight $w_u$, by fortune of having many geometrically close nearby nodes $\vec{x}_v$.
 % This would clearly have better classification performance than power law generating weights.
-For the classification comparison framework, Blasius actually uses weight copying for fitting the Chung-Lu GGM, but not for the hyperbolic GGM (which is odd). This doesn't make a fair / like for like comparison, so we cover all bases by having both weight copied and power law fit GIRGs, as well as adding in power law fit Chung-Lu. ER and BA GGMs are still just fit on the courser metric of overall graph average degree.
+For the classification comparison framework, Blasius actually uses weight copying for fitting the Chung-Lu GGM, but not for the hyperbolic GGM (which is odd). This doesn't make a fair / like for like comparison, so we cover all bases by having both weight copied and power law fit GIRGs, as well as adding in a power law fit Chung-Lu. ER and BA GGMs are still just fit on the courser metric of overall graph average degree, as they have little ability to replicate a power law degree distribution.
 
 Comparing weight copied Chung-Lu with weight copied GIRGs was additionally interesting for harder feature sets where other GGMs struggled to get below 98\% classification accuracy - having such high constrained numbers makes it harder to compare meaningfully between GGMs (drawing conclusions from 98\% vs 99\% is tough)
 
@@ -269,24 +272,23 @@ Hence for a GIRG, $ \E[dd(x)]  \propto x^{-\tau}$ for $x_\text{min} < x \in \N$,
 
 \subsection{Fitting $c$ and $\alpha$}
 These are our last two GIRG parameters to fit.
-The parameter $c$ is most directly linked to the generated graph's average degree, whereas the parameter $\alpha$ is more linked to the power of the geometry - larger $\alpha$ decreases the probability of longer distance edges which have $\rho_{uv} < 1$, leaving edges more dominated by shorter (and hence more geometric and clustered) edges. We therefore follow \cite{blasius2018towards} by fitting $\alpha$ with the clustering coefficient. Regrettably we used in our experiments the mean local clustering coefficient (LCC) to fit our GIRGs and Hyperbolic Random Graphs, 
-
+The parameter $c \in \R^+$ is most directly linked to the generated graph's average degree, whereas the parameter $\alpha \in (1, \infty]$ is more linked to the power of the geometry - larger $\alpha$ decreases the probability of longer distance edges which have $\rho_{uv} < 1$, leaving the edge set more dominated by shorter (and hence more geometric and clustered) edges. We therefore follow \cite{blasius2018towards} by fitting $\alpha$ with the clustering coefficient. Regrettably we used in our experiments the mean \textit{local clustering coefficient (LCC)} to fit our GIRGs and Hyperbolic Random Graphs, 
 \begin{equation}
     \mathrm{LCC}(G) := \frac{1}{|V|} \sum_{u \in V} 
-    \frac{| \{ v, v' \in \Gamma(u): v \sim v'\} |}{{|\Gamma(u)| \choose 2}}
+    \frac{| \{ v, v' \in \Gamma(u): v \sim v'\} |}{{|\Gamma(u)| \choose 2}} \in [0, 1]
 \end{equation}
-instead of the global clustering coefficient as in \cite{blasius2018towards}. The global clustering coefficient is the fraction of total \q{V} shapes that indeed are completed as full triangles and is likely a better metric than the LCC. Luckily in practice they generally differ by less than 1\%.
+instead of the global clustering coefficient as in \cite{blasius2018towards}. $\Gamma(u)$ is the set of neighbours of $u$, so LCC counts the fraction of pairs of neighbours of $u$ that possess the triangle completing third edge. The global clustering coefficient is the fraction of total \q{V} shapes that indeed are completed as full triangles and is likely a better metric than the LCC. Luckily in practice they generally differ by less than 1\%.
 
 Unfortunately $c$ and $\alpha$ are not wholly independent, so we must fit them in tandem, fitting $c$ for a given $\alpha$ so as to match the average degree of $G$, and then $\alpha$ for that given $c$ to match the LCC of $G$. This then looks like coordinate ascent in 2D: we alternatingly set $c \gets \hat{c}_1;\; \alpha \gets \hat{\alpha}_1;\; c \gets \hat{c}_2;\; \alpha \gets \hat{\alpha}_2;\; ...$.
 
-Fitting $\alpha \gets \hat{\alpha}_i$ based on LCC is precisely ABC like - we propose potential $\alpha_i$ values using binary search, for which we generate a graph $G' \sim \cG_{\GIRG}(n, d, \hat{c}_i, \alpha_i, \tau)$, and use the distance metric $\delta(G, G') = |\mathrm{LCC}(G) - \mathrm{LCC}(G')|$ to both propose the next candidate $\alpha_i$ and eventually accept the final best $\hat{\alpha}_i$. Expected LCC is monotone in $\alpha$ so we know which direction to make a new proposal - we follow \cite{blasius2018towards} in doing binary search on $\alpha^{-1} \in (0, 1)$.
+Fitting $\alpha \gets \hat{\alpha}_i$ based on LCC is precisely ABC like - we propose potential $\alpha_i$ values, for which we generate a graph $G' \sim \cG_{\GIRG}(n, d, \hat{c}_i, \alpha_i, \tau)$, and use the distance metric $\delta(G, G') = |\mathrm{LCC}(G) - \mathrm{LCC}(G')|$ to both propose a next candidate $\alpha_i$ and eventually accept the final best $\hat{\alpha}_i$. Expected mean LCC is monotone in $\alpha$ so we know which direction to make a new proposal, and we follow \cite{blasius2018towards} in doing binary search in $\alpha^{-1}$ search space with starting bounds $[0. 1)$.
 
-\cite{blasius2022efficiently} luckily gives a more efficient method to fit $c$ given $\alpha, d$, and a pre-sampled set of weights $(w_u)_{u \in V}$, that doesn't involve fully sampling a new $G' \sim \cG_{\GIRG}$. They derive a formula for the expected average degree $\E[\overline{deg}(G')]$ of the GIRG which looks like, emphasizing the dependence on $c$,
+\cite{blasius2022efficiently} luckily gives a more efficient method to fit $c$ given $\alpha, d$, and a pre-sampled set of weights $(w_u)_{u \in V}$, that doesn't involve fully sampling a new $G' \sim \cG_{\GIRG}$. They derive a formula for the expected average degree $\E[\overline{deg}(G')]$ of the GIRG which looks, emphasizing the dependence on $c$, like:
 \begin{equation}
     \label{eq:expected_edge_degree}
     \E[\overline{deg}(G') | c] = c A + c^{1/\alpha} B
 \end{equation}
-Hence we just have to numerically solve \cref{eq:expected_edge_degree} for $\hat{c}: \E[\overline{deg}(G') | \hat{c}] = \overline{deg}(G) = 2 |E|/|V|$ in order to obtain our desired average degree.
+Hence we just have to numerically solve \cref{eq:expected_edge_degree} for $\hat{c}: \E[\overline{deg}(G') | \hat{c}] = \overline{deg}(G) = 2 |E|/|V|$ in order to obtain our desired average degree. Blasius provides C++ code for this, which finds $\hat{c}$ with a binary search.
 
 The expected average degree formula of \cref{eq:expected_edge_degree} miraculously holds for all volume based toroidal GIRGs (regardless of exact disance function $r(x_u, x_v) = r_{uv}$), and we can even adapt the formula to be independent of dimension $d$.
 
@@ -305,12 +307,14 @@ The expected average degree formula of \cref{eq:expected_edge_degree} miraculous
 % For example in the $\infty$-norm, $Vol(r_{uv}) = (2r_{uv})^d$ as a cube with side-length $2r_{uv}$.
 
 % Having volume in the edge probability formula is actually a generalisation of taking $r_{uv}$ to the dth power - the point being to make $p(u \sim v | x_u, w_u, w_v) = E_r[p_{uv}(r)] = \Theta(w_u w_v/n)$, regardless of dimension.
-We'll calculate $E_r[p_{uv}(r) | c]$ for a general volume function $Vol(r)$, and fixed weight sequence $(w_u)_{u \in V}$ and use this to recover \cref{eq:expected_edge_degree} via 
+In this subsection we calculate $E_r[p_{uv}(r) | c]$ in a volume formulated GIRG, whose volume function is denoted $Vol(r)$ (could correspond to any of max norm, euclidean norm, MCD etc.), and arbitrary dimension $d$ torus geometry $\chi = \T^d$.
+
+Given a fixed weight sequence $(w_u)_{u \in V}$ we will recover \cref{eq:expected_edge_degree} via 
 \begin{equation}
     E[\overline{deg}(G') | c] = \frac{1}{n} \sum_{u \in V} \sum_{v \in V} E_r[p_{uv}(r)]
 \end{equation}
 % We'll derive the same resultant $p(u \sim v | w_u, w_v) = \E_r[p_{uv}(r)]$ regardless, relying only on the fact that $Vol(r)$ is an increasing function. Finally, $\E[d_u] = \sum_v p(u \sim v | w_u, w_v)$ and hence $\E[\overline{deg}] = \sum_u \E[d_u]$.
-Now $E_r[p_{uv}(r)] = \int_r p_{uv}(r) p(r) dr$. We'll break this down into $\int_{r: \rho_{uv} \geq 1} + \int_{r: \rho_{uv} < 1}$ and write $\hat{r} : Vol(\hat{r}) = c^{1/\alpha} \left ( \frac{w_u w_v}{W} \right )$ as the boundary at which $\rho_{uv} = 1$.
+Now $E_r[p_{uv}(r)] = \int_r p_{uv}(r) p(r) dr$. We'll break this down into $\int_{r: \rho_{uv} \geq 1} + \int_{r: \rho_{uv} < 1}$ (short edges and long edges, corresponding to edge probabilities being capped at 1, or strictly less than one for larger inter node distances) and write $\hat{r} : Vol(\hat{r}) = c^{1/\alpha} \left ( \frac{w_u w_v}{W} \right )$ as the boundary at which $\rho_{uv} = 1$.
 
 Hence we get $E_r[p_{uv}(r)] = \int_0^{\hat{r}} p(r) dr + \int_{\hat{r}}^{r_{\max}} p_{uv}(r) p(r) dr$.
 
@@ -340,15 +344,15 @@ Substituting $Vol = Vol(r);\; dr = dVol \frac{dr}{dVol} = \frac{dVol}{p(r)}$, we
     \frac{c}{\alpha - 1} \left (\frac{w_u w_v}{W} \right )^\alpha
     \label{eq:p_u_to_v_marginal_on_position}
 \end{align}
-Where in the last two lines we sub in $Vol(\hat{r}) = c^{1/\alpha} \left (\frac{w_u w_v}{n} \right )$, and $Vol(\mathbb{T}) = 1$.
+where in the last two lines we sub in $Vol(\hat{r}) = c^{1/\alpha} \left (\frac{w_u w_v}{n} \right )$, and $Vol(\mathbb{T}) = 1$.
 I.e. across all GIRGs of different distance functions and dimensions $d$, we get the same resultant edge probabilities when marginalising out node locations. Note this is also $\Theta(\frac{w_u w_v}{W})$ since $\alpha > 1$, which shows the similarity between GIRGs and Chung-Lu!
 
-Following \cite{blasius2022efficiently} Appendix, the formula just needs a correction for pairs $u, v$ such that $Vol(\hat{r}) = c^{1/\alpha} \left ( \frac{w_u w_v}{n} \right ) > 1$, for which the second integral is unnecessary, and the first's upper bound is capped lower at $1$, the volume of the torus. These are pairs $u, v$ which have such giant weights $w_u, w_v$ that $p_{uv}(r) = 1$ identically, no matter how far apart $x_u, x_v$ are placed in the torus.
+Following \cite{blasius2022efficiently} Appendix, the formula just needs a correction for pairs $u, v$ such that $Vol(\hat{r}) = c^{1/\alpha} \left ( \frac{w_u w_v}{n} \right ) > 1$, for which the second integral is unnecessary, and the first's upper bound is capped lower at $1$, the volume of the torus. These are (rare) pairs of nodes $u, v$ which have such giant weights $w_u, w_v$ that $p_{uv}(r) = 1$ identically, no matter how far apart $x_u, x_v$ are placed in the torus.
 
 
 
 \subsection{Estimating const $c$ in Cube GIRGs}
-To fit $c$ for a specific real graph $G$, for torus GIRGs we solved for the equation $f(c) = \overline{deg}$, given fixed $\alpha$. Our distance based Cube GIRGs have fewer edges in expectation than their toroidal counterparts, and no nice formula for the expected average degree. Instead we estimate $\hat{c}$ by starting with an initial guess $c_0: f(c_0) = \overline{deg}$, and iteratively updating by each time generating a graph $G_i \sim \GIRG(c_i)$ and setting $c_{i+1} \gets c_i \frac{n \, \overline{deg}}{2 |E(G_i)|}$ until convergence.
+To fit $c$ for a specific real graph $G$, for torus GIRGs we solved for the equation $f(c) = \overline{deg}$, given fixed $\alpha$. Our distance based Cube GIRGs have fewer edges in expectation than their toroidal counterparts, and no nice formula for the expected average degree. Instead we estimate $\hat{c}$ by starting with an initial guess $c_0=1$, and iteratively updating by each time generating a graph $G_i \sim \GIRG(c_i)$ and setting $c_{i+1} \gets c_i \frac{n \, \overline{deg}}{2 |E(G_i)|}$ until convergence.
 
 
 \section{Realism Framework Results}
@@ -373,7 +377,7 @@ We present in \cref{fig:blasius_framework_table} the harder classification test 
 
 \paragraph{Types of GIRG tested in classification framework}
 \begin{itemize}
-    \item The "base" GIRG is max norm torus GIRGs for dimension $d=1,2,...,7$
+    \item The "base" GIRG type is max norm torus GIRGs for dimension $d=1,2,...,7$
     \item MCD torus GIRGs for $d=2,3,4,5$ ($d=1$ is equivalent to max norm)
     \item Min/max mixed torus GIRGs with groupings 1-23; 1-234; 12-34; 1-2-34. E.g. 1-23 denotes $\norm{\vec{x} - \vec{y}} = \min \left \{ |x_1 - y_1|_C,\; \max(|x_2 - y_2|_C,\, |x_3 - y_3|_C) \right \}$
     \item Max norm cube GIRGs - though we were held back due to the increased computation when fitting the average degree with constant $c$. Hence we just had $d=1,2,3$ cube GIRGs, and $d=1,2,3,4,5$ copy-weight cube GIRGs (an attempt for maximal realism)
