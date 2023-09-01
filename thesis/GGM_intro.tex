@@ -271,6 +271,7 @@ Hence for a GIRG, $ \E[dd(x)]  \propto x^{-\tau}$ for $x_\text{min} < x \in \N$,
 
 
 \subsection{Fitting $c$ and $\alpha$}
+\label{subsec:fitting_c_and_alpha}
 These are our last two GIRG parameters to fit.
 The parameter $c \in \R^+$ is most directly linked to the generated graph's average degree, whereas the parameter $\alpha \in (1, \infty]$ is more linked to the power of the geometry - larger $\alpha$ decreases the probability of longer distance edges which have $\rho_{uv} < 1$, leaving the edge set more dominated by shorter (and hence more geometric and clustered) edges. We therefore follow \cite{blasius2018towards} by fitting $\alpha$ with the clustering coefficient. Regrettably we used in our experiments the mean \textit{local clustering coefficient (LCC)} to fit our GIRGs and Hyperbolic Random Graphs, 
 \begin{equation}
