@@ -356,19 +356,9 @@ To fit $c$ for a specific real graph $G$, for torus GIRGs we solved for the equa
 
 
 \section{Realism Framework Results}
-% TODO
-% \begin{enumerate}
-%     \item table of classification accuracies vs real-world
-%     \item explanation of copyweight GIRGs, normal GIRGs, cube GIRGs, min GIRGs, mixed GIRGs
-%     \item analysis of which features different models seem to be good at
-%     \item table of classification accuracies vs 1D GIRGs
-%     \item analysis of which features different dimensional GIRGs seem to be distinguishable on
-%     \item 
-% \end{enumerate}
+As introduced in \cref{sec:ggm_blasius_framework}, we fit a selection of GGMs, including various different kinds of GIRG on 104 socfb Facebook graphs, whose sizes range from $n=762$ to $n=35,111$ nodes. With each GGM we generated a mirrored dataset of fake graphs, with which we train a sequence of SVM classifiers to distinguish between the real and fake datasets, differing on which high level graph features they use as input. Classification accuracy using a particular GGM and feature set could be e.g. 100\% if the fake graphs are highly unrealistic in these features, or as good as 50\% if they're indistinguishable from the real graphs. Our results are shown in \cref{fig:blasius_framework_table} and \cref{fig:blasius_framework_means}, along with a \q{control} in \cref{fig:blasius_framework_means_1d_base} which classifies GGM fake datasets against the 1d max torus generated graphs instead of the real graphs. The numbers displayed in all three are actually the \textit{misclassifcation rate}, i.e. $1 - \text{accuracy}$, so that higher numbers mean more realistic GGM fit.
 
-As introduced in \cref{sec:ggm_blasius_framework}, we fit a selection of GGMs, including various different kinds of GIRG on around 100 socfb Facebook graphs, whose sizes range from 1000 to 100,000 nodes. For each GGM we produce a mirrored dataset of fake graphs, with which we train a sequence of SVM classifiers to distinguish between the real and fake datasets, differing on which high level graph features they use as input. Classification accuracy using a particular dataset for a GGM could be e.g. 100\% if the fake graphs are highly unrealsitic, or as good as 50\% if they're indistinguishable from the real graphs. In \cref{fig:blasius_framework_table} and \cref{fig:blasius_framework_means} the numbers displayed are actually the \textit{Misclassifcation rate}, i.e. $1 - \text{accuracy}$, so that higher is more distinguishable.
-
-We present in \cref{fig:blasius_framework_table} the harder classification test of using a whole distribution of node level features - i.e. for one node level property \q{deg} would actually include 5 features of the distribution of node degrees: mean, median, lower quartile, upper quartile and standard deviation. In contrast the classification results in \cref{fig:blasius_framework_means} use just the mean node level features, for which it is easier to fool the classifier. Having more significantly higher than zero misclassification rate numbers in \cref{fig:blasius_framework_means} allows more comparison between different GGMs and across a wider range of features.
+In \cref{fig:blasius_framework_table} we present results of the harder classification test of using a whole distribution of node-level features. E.g. one node level property \q{deg}  actually means the inclusion of 5 features describing the distribution of node degrees: mean, median, lower quartile, upper quartile and standard deviation. In contrast the classification results in \cref{fig:blasius_framework_means} and \cref{fig:blasius_framework_means_1d_base} just use the mean node level features, which makes it easier to fool the classifier. Having more significantly higher than zero misclassification rate numbers in \cref{fig:blasius_framework_means} allows for more  meaningful comparisons between different GGMs and across a wider range of features.
 % Higher classification accuracies, e.g. $99\%$, denote that the GGM generates are readily distinguishable from the real graphs, and hence the GGM is a poor / unrealistic fit; $50\%$ accuracy is the gold standard of real/fake indistinguishability on the feature set.
 
 % We can see from \cref{fig:blasius_framework_table} that mimicking the features of real Facebook graphs with generations from a fit GGM is tough. For example in the feature set (n, m, deg), by deg we mean to include 5 numbers per graph: mean node degree; lower, middle (median) and upper quartile node degree, and standard deviation over all node degrees. Our numbers can be compared to Table 2 in \cite{blasius2018towards}, which also includes feature sets with just mean node values, which in some cases makes fooling the classifier much easier\footnote{We do get similar results to Table 2 when training SVMs with just the mean node features, which can yield lower accuracies in the $50-70\%$ range}.
@@ -377,18 +367,18 @@ We present in \cref{fig:blasius_framework_table} the harder classification test 
 
 \paragraph{Types of GIRG tested in classification framework}
 \begin{itemize}
-    \item The "base" GIRG type is max norm torus GIRGs for dimension $d=1,2,...,7$
+    \item The \q{base} GIRG type is max norm torus GIRGs of dimension $d=1,2,...,7$
     \item MCD torus GIRGs for $d=2,3,4,5$ ($d=1$ is equivalent to max norm)
     \item Min/max mixed torus GIRGs with groupings 1-23; 1-234; 12-34; 1-2-34. E.g. 1-23 denotes $\norm{\vec{x} - \vec{y}} = \min \left \{ |x_1 - y_1|_C,\; \max(|x_2 - y_2|_C,\, |x_3 - y_3|_C) \right \}$
-    \item Max norm cube GIRGs - though we were held back due to the increased computation when fitting the average degree with constant $c$. Hence we just had $d=1,2,3$ cube GIRGs, and $d=1,2,3,4,5$ copy-weight cube GIRGs (an attempt for maximal realism)
-    \item The host of simpler models CL, BA, ER as in \cite{blasius2018towards}, as well as Hyperbolic Random Graphs which are very similar to 1d torus GIRGs
+    \item Max norm cube GIRGs. We were held back due to the increased computation when fitting the average degree with constant $c$, so only include  $d=1,2,3$ cube GIRGs, and $d=1,2,3,4,5$ copy-weight cube GIRGs (an attempt for maximal realism)
+    \item The host of simpler models CL (with power law fit weights, and with degree copied weights), BA, ER as in \cite{blasius2018towards}, as well as Hyperbolic random graphs which are very similar to 1d torus GIRGs
 \end{itemize}
 
-\paragraph{New features}
-We additionally added features that weren't assessed in \cite{blasius2018towards}. Shown in \cref{fig:blasius_framework_table} are the non node-level  \q{k-cores, comms}. These denote k-core sizes and community sizes (communities found using the Louvain method).
-However they can be rather high variance numbers, for example a 3000 node 2d max torus GIRG with average degree 60 can end up with 40 k-cores and just 8 communities. This means that the distribution features of community size would be the average size of these 8 communities, as well as lower, middle and upper quartile size and standard deviation of these sizes.
+\paragraph{New classification features}
+We additionally added features that were not assessed in \cite{blasius2018towards}. Shown in \cref{fig:blasius_framework_table} are the non-node-level features \q{k-cores, comms}. These denote k-core sizes and community sizes (communities found using the Louvain method).
+However these can be rather high variance numbers. For example a 3000 node 2d max torus GIRG with average degree of 60 can end up with 40 k-cores and just 8 communities. This means that the community size distribution features would be the average size of these 8 communities, as well as lower, middle and upper quartile size and standard deviation of these sizes.
 
-Unfortunately for community sizes, even Erdos-Renyi graphs have a misclassification rate comparable to the rest, so this feature seems useless.
+Unfortunately, for community sizes, even Erdos-Renyi graphs have a misclassification rate comparable to the other GGMs, so this feature seems useless.
 
 % \subsection{Analysis of Classification Results}
 % The framework of \cite{blasius2018towards} has its limitations, but we can draw some general conclusions.
@@ -397,29 +387,31 @@ Unfortunately for community sizes, even Erdos-Renyi graphs have a misclassificat
 \subsection{Degree distribution features}
 % \subsubsection{Degree distribution features}
 % \addtocounter{subsubsection}{1}
-As noted in \cite{blasius2018towards} features like Katz centrality, PageRank, k-core number / k-core sizes, node degrees and node degree power law are more related to the degree distribution. This means they are less useful for distinguishing between different types of GIRG geometries.
+As noted in \cite{blasius2018towards} features like Katz centrality, PageRank, k-core number / k-core sizes, node degrees and node degree power law are more closely related to the degree distribution. Consequently they are less useful for distinguishing between different types of GIRG geometries.
 
-For this group we observe much better performance for copy-weight GIRGs / copy-weight Chung-Lu. For all these groups except \q{n, m, Katz} in \cref{fig:blasius_framework_table} (distribution features), non copy-weight GGMs have all zero misclassification rates. They also feature monotonically increasing rates with increasing GIRG dimension, as this moves the graphs to be closer to the Chung-Lu degree distribution, see \cite{friedrich2023cliques}.
+For this group of features we naturally observe much better performance for copy-weight GIRGs / copy-weight Chung-Lu which have the most similar degree distributions to the real graphs - Chung-Lu doing the best as it has the purest degree alignment. For all these features  except \q{n, m, Katz} in \cref{fig:blasius_framework_table} (distribution features), non copy-weight GGMs have all zero misclassification rates. For k-core, deg and Katz, the copy-weight GIRGs also feature monotonically increasing misclassification rates with increasing dimension, presumably as higher dimensions make the GIRG more similar to the Chung-Lu - see \cite{friedrich2023cliques}.
 
-For just mean features there are some non-zero rates for non-copy-weight GGMs, but generally worse numbers than the copy-weight GGMs. For whatever reason, non-copy-weight 3d cube GIRGs are much better on k-core ($16\%$) and decently better on Katz centrality ($17\%$) than the other GIRG types. This could be due to a more realism of extreme nodes near the edge of the cube that both have a lowered degree, and whose neighbours are also similarly low degree and extreme. The copy weight GGMs do get up to $47\%$ on Katz, however oddly copy weight cube GIRGs have just $7-9\%$ misclassification rate.
+For just mean features in \cref{fig:blasius_framework_means}, there are many more non-zero rates for non-copy-weight GGMs, but generally worse numbers than the copy-weight GGMs. For whatever reason, non-copy-weight 3d cube GIRGs are much better on k-core ($16\%$) than all other GGMs, even copy-weight 3d cube GIRGs which get just $7\%$, and decently better on Katz centrality ($17\%$) than the other non-copy-weight GGMs.
+This could be due to a more realism of extreme nodes near the edge of the cube that both have a lowered degree, and neighbours which are also similarly low degree due to being extremely located.
+% The copy weight GGMs do get up to $47\%$ on Katz, however oddly copy weight cube GIRGs have just $7-9\%$ misclassification rate on k-core.
 
 \subsection{Geometric Features}
 % \subsubsection{Geometric features}
 % \addtocounter{subsubsection}{1}
-The features betweenness centrality, closeness centrality, local clustering coefficient, diameter and effective diameter are more related to the geometry. GIRGs show on these features increased reality in comparison to the non geometric GGMs, and we can also compare between the different max / MCD / mixed; Torus / Cube GIRG types. We focus solely on the non-copy-weight GIRGs, with numbers from the mean based classifiers in \cref{fig:blasius_framework_means} rather than the distribution based classifiers in \cref{fig:blasius_framework_table} which have too low numbers for a good comparison. In the former, the copy-weight cube GIRGs have similar performance on these features - their more realistic degree distribution only help in the latter harder simulation task.
+The features betweenness centrality, closeness centrality, local clustering coefficient, diameter and effective diameter are more related to the geometry. GIRGs show on these features increased realism in comparison to the non geometric GGMs, and we can also compare between the different GIRG types: max / MCD / mixed distance functions; torus / cube geometries. We focus exclusively on the non-copy-weight GIRGs, with numbers from the mean based classifiers in \cref{fig:blasius_framework_means} rather than the distribution based classifiers in \cref{fig:blasius_framework_table} which have too low numbers for a good comparison. In the former, the copy-weight cube GIRGs have similar performance on these features - their more realistic degree distribution only help in the latter, more challenging simulation task.
 
 
-Chung-Lu graphs are a good comparison point against GIRGs by being a similarly inhomogenous graph but without any geometry.
-\footnote{Another potential GGM geometry null hypothesis would have been the configuration model which tries to mimick a degree sequence, like Chung-Lu, but more strictly. Each node is given a set number of \q{half edges} which gives it a set degree (the degree sequence can be random e.g. power law generated, or given e.g. copied directly from a real graph. Half edges are then joined together at random.)}.
+Chung-Lu graphs are a good comparison point against GIRGs by being a similarly degree inhomogenous graph, just without any geometric influence.
+\footnote{Another potential GGM geometry null hypothesis would have been the configuration model which tries to mimick a degree sequence, like Chung-Lu, but more strictly. Each node is given a set number of \q{half edges} which gives it a set degree (the degree sequence can be random e.g. power law generated, or given e.g. copied directly from a real graph). Half edges are then joined together at random.}.
 
 
 
-Comparing between non-copy-weight GIRGs, 1d max torus GIRGs are surprisingly best or close to best on many feature sets. This is evidence that the geometric component of real graphs is most strong in just one dimension, which we also see in \cref{chap:likelihood_point_estimation}. It would be interesting to see if 2d or 3d distorted GIRGs could do better on these features, as they would precisely exhibit geometry with one dominating dimension and a few auxiliary.
-On betweenness, 1d max torus GIRGs perform the best, with a slight decay for 2d-4d. Mixed GIRGs hold up well, but MCD GIRGs do much worse for some reason; cube GIRGs are a little worse.
-However MCD and mixed GIRGs do better on closeness than max GIRGs, especially 1-234 mixed GIRGs. This is actually evidence for the \q{one strong dimension} hypothesis, as 1-234 mixed GIRGs give more significance to their dim 1 over dims 2,3,4.  
+Among non-copy-weight GIRGs, 1d max torus GIRGs are surprisingly best or close to best on many feature sets. This is evidence that the geometric component of real graphs is strongest in just one dimension, which we also see in \cref{chap:likelihood_point_estimation}. It would be interesting to see if 2d or 3d distorted GIRGs could do better on these features, as they would precisely exhibit geometry with one dominating dimension, and a few auxiliary ones.
+On betweenness, 1d max torus GIRGs perform the best, with a slight decay for 2d-4d. Mixed GIRGs hold up well, but MCD GIRGs do much worse; cube GIRGs are only a little worse.
+However MCD and mixed GIRGs do better on closeness than max GIRGs, especially 1-23 mixed GIRGs. This is actually evidence for the \q{one strong dimension} hypothesis, as 1-23 mixed GIRGs give more significance to their dim 1 over dims 2,3. We can even observe in \cref{fig:blasius_framework_means_1d_base} that 1-234 mixed GIRGs have such a strong force of their first dimension that they are hard to classify apart from 1d max torus GIRGs!
 
 \paragraph{Effective diameter and cube GIRGs}
-Cube GIRGs generally underperform, except on effective diameter, where they shine through as the best, with 1cu\textless 2cu\textless 3cu. This makes sense as cube geometry doesn't impact many shortest paths, but rather does so on the longest shortest paths, between nodes at opposite extremes of the cube which would otherwise have torus shortcutted. We can dive into see that our intuition is correct: real effective diameters of FB graphs range from $3.0$ to $4.4$; 2d torus GIRGs are too small, on average $0.17$ less than their real counterparts, while cube GIRGs are larger and on average just $0.04$ less.
+Cube GIRGs generally underperform, except on effective diameter, where they shine through as the best, with ranking 1cu\textless 2cu\textless 3cu. This makes sense as cube geometry doesn't impact many shortest paths, but rather does so on the longest shortest paths, between nodes at opposite extremes of the cube which would otherwise be shortcutted by the torus. We can dive into the data to see that our intuition seems correct: real effective diameters of FB graphs range from $3.0$ to $4.4$; 2d torus GIRGs' are too small, on average $0.17$ less than their real counterparts, while 2d cube GIRGs' are larger and on average just $0.04$ less.
 
 
 
@@ -432,14 +424,14 @@ Cube GIRGs generally underperform, except on effective diameter, where they shin
 % Community sizes and k-core sizes are potentially less consistent features to consider as they have higher variance than node level features.
 
 
-\paragraph{Local Clustering Coefficient (LCC)} due to their geometry, GIRGs exhibit significant clustering just like real graphs. We explicitly match for the mean LCC in our GIRG fitting procedure, so it's not surprising that the \q{n, m, LCC} row in \cref{fig:blasius_framework_means} has near perfect performance for most GIRGs, whereas all other GGMs have $0\%$ misclassification rate as they have tiny mean LCC. This drops to $0\%$ for all GIRGs except copy-weight cube GIRGs when classifying on LCC distribution.  \cite{blasius2018towards} explained this by finding their fit hyperbolic graphs to have too low variance, which is likely the case here too.
+\paragraph{Local Clustering Coefficient (LCC)} Due to their geometry, GIRGs exhibit significant clustering just like real graphs. We explicitly match for the mean LCC in our GIRG fitting procedure, so it's not surprising that the \q{n, m, LCC} row in \cref{fig:blasius_framework_means} has near-perfect performance for most GIRGs, whereas all other GGMs have a $0\%$ misclassification rate as they have tiny mean LCCs. This drops to $0\%$ for all GIRGs except copy-weight cube GIRGs when classifying based on LCC distribution. \cite{blasius2018towards} explained this by showing their fit hyperbolic graphs to have too low variance, which is likely the case for GIRGs here too.
 
-For mean LCC only 4d, 5d MCD GIRGs and 6d, 7d max GIRGs have low misclassification rate, due to their inability to match the real graphs' high mean LCC. E.g. on socfb-Caltech36, the real graph has mean LCC of $0.41$, however capping at $\alpha=100.0$ ($\alpha=\infty$ wouldn't improve the situation much either), the max norm 4d GIRG can only reach $0.33$, and the 5d GIRG just $0.24$. LCC is guaranteed to be non-tiny due to the triangle inequality: if $u \sim v_1$ and $u \sim v_2$ then likely $r(u, v_1), r(u, v_2)$ are small, which makes $r(v_1, v_2) \leq r(u_, v_1) + r(u, v_2)$ also small. However for higher dimension GIRGs, $r(v_1, v_2)$ is more likely to be closer to this upper bound. LCC decays already for 4d MCD GIRGs as the MCD distance function isn't actually a metric so only obeys the triangle inequality stochastically (some percentage of the time. E.g. if $u$ is close to $v_1$ in dimension 1, and close to $v_2$ in dimension 2 then $v_1, v_2$ are generally not close to each other).
+For mean LCC only 4d, 5d MCD GIRGs and 6d, 7d max GIRGs exhibit low misclassification rates, due to their inability to match the real graphs' high mean LCC. E.g. on socfb-Caltech36, the real graph has a mean LCC of $0.41$, however capping at $\alpha=100.0$ ($\alpha=\infty$ wouldn't improve the situation much either), the max norm 4d torus GIRG can only reach $0.33$, and the 5d GIRG just $0.24$. LCC is guaranteed to be non-tiny in GIRGs due to the triangle inequality: if $u \sim v_1$ and $u \sim v_2$ then likely $r(u, v_1), r(u, v_2)$ are both small, which makes $r(v_1, v_2) \leq r(u_, v_1) + r(u, v_2)$ also small. However for higher dimension GIRGs, $r(v_1, v_2)$ is more likely to be closer to this upper bound. LCC decays already for 4d MCD GIRGs as the MCD distance function isn't actually a metric so only obeys the triangle inequality stochastically (some percentage of the time. E.g. if $u$ is close to $v_1$ in dimension 1, and close to $v_2$ in dimension 2 then $v_1, v_2$ are generally not close to each other).
 
 
 \begin{figure}
     \centering
-    \includegraphics[width=0.9\textwidth]{./figures/LCC_vs_d.png}
+    \includegraphics[width=0.8\textwidth]{./figures/LCC_vs_d.png}
     \caption{Increasing the dimension $d$ of a GIRG will decrease the mean LCC, but only up to a $\Theta(1)$ threshold due to the triangle inequality. Each point is one generated GIRG, all other parameters remaining fixed.}
     \label{fig:LCC_vs_d}
 \end{figure}
@@ -452,16 +444,14 @@ For mean LCC only 4d, 5d MCD GIRGs and 6d, 7d max GIRGs have low misclassificati
 % Chung-Lu does better on community size statistics; communities could arguably spring from geometry, but GIRGs' uniformly random geometry isn't really designed for this - you could rather imagine a more realistic setup if node locations were taken from a mixture of gaussian distributions (e.g. a university town might have age/occupation clusters of student age vs working age, or academic vs non-academic peoples).
 
 
-\subsection{Case study of distribution vs mean accuracy: closeness centrality}
+\subsection{Case study of distribution vs mean based classification: closeness centrality}
 % \subsubsection{Case study of distribution vs mean accuracy: closeness centrality}
 % \addtocounter{subsubsection}{1}
-In \cref{fig:blasius_framework_table} which provides feature distributions as input to the SVM classifier, it's disappointing that non copy-weight GIRGs have such poor performance, even on \q{geometric} features like closeness, betweenness and LCC (at least on closeness and betweenness they still recognizably outperform CL, BA and ER). E.g. 2d max Torus GIRGs have a misclassification rate of just $1\%$ and $2\%$ on \q{n, m, betw} and \q{n, m, close}, compared to much better $38\%$ and $28\%$ on the mean based classifier equivalents. To explain this large disparity we do a case study on closeness, which happily also assuages some of our doubts.
+In \cref{fig:blasius_framework_table} which provides feature distributions as input to the SVM classifier, it is disappointing that non copy-weight GIRGs show such poor performance, even on \q{geometric} features like closeness, betweenness and LCC (at least on closeness and betweenness they still recognizably outperform CL, BA and ER). E.g. 2d max torus GIRGs have a misclassification rate of just $1\%$ on \q{n, m, betw} and $2\%$ on \q{n, m, close}, compared to much better $38\%$ and $28\%$ on the mean based classifier equivalents. To explain this large disparity we do a case study on closeness, which happily also assuages some of our concerns.
 
-\cref{fig:real_2d_closeness_mean_scatter} shows that mean closeness fits very accurately to the real graphs. Nonetheless, due to a consistently lower standard deviation of closeness in the GIRGs and the fact that the standard deviation of closeness in real graphs fits well as a function of number of nodes, the 2d GIRGs are distinguishable from real graphs on this feature set. We hence find the $2\%$ misclassification rate misleadingly low, and the GIRG's realism in closeness somewhat vindicated.
+\cref{fig:real_2d_closeness_mean_scatter} shows that mean closeness aligns very accurately to the real graphs. Nonetheless, due to a consistently lower standard deviation of closeness in the GIRGs and the fact that the standard deviation of closeness in real graphs fits well as a function of number of nodes, the 2d GIRGs are distinguishable from real graphs on this feature set. We hence find the $2\%$ misclassification rate misleadingly low, and the GIRG's realism in closeness somewhat vindicated.
 
 % This analsyis is similar to that done in \cite{blasius2018towards} to explain $0\%$ LCC misclassification rates for hyperbolic graphs when taking into account distribution of features - they found that hyperbolic graphs have consistently too low LCC standard deviation.
-
-Unfortunately classification accuracy is a crude metric. One drawback of this framework is that the attainable accuracy is also affected by the level of variance of a feature set across the real graph dataset relative to the fake dataset. GGMs generally end up with their features concentrated in a small subsection of the feature space, so if the real graphs are more spread out, it may be easier to overlap with a portion of their feature data points and attain a low but appreciable misclassification rate. However if the real graphs are less spread out they can miss altogether and get a tiny misclassifcation rate. See \cref{fig:low_var_high_var_svm_clumps} for an illustration of different scenarios. In this case of closeness, the real graph feature vectors fit quite a precise pattern and hence the GIRG feature vector clump, though just slightly off, has little overlap.
 
 \begin{figure}
     \centering
@@ -489,24 +479,9 @@ Unfortunately classification accuracy is a crude metric. One drawback of this fr
     % \caption{Closeness centrality case study on fit 2d max torus GIRGs against their real counterparts. In plots (a) and (b), each dot is a real / fake graph pair, with the x/y value being the specifid feature's vale for the real/fake graph respectively. In plot (c), each dot is a real graph.}
 \end{figure}
 
+\subsection{One drawback to the classification realism framework}
+Classification accuracy is regrettably a crude metric. One limitation of this framework is that the attainable accuracy is also affected by the level of variance of a feature set across the real graph dataset relative to the fake dataset. GGMs generally end up with their features concentrated in a small subsection of the feature space, so if the real graphs are more spread out, it may be easier to overlap with a portion of their feature data points and attain a low but appreciable misclassification rate. However if the real graphs are less spread out they can miss altogether and get a minuscule misclassifcation rate. See \cref{fig:low_var_high_var_svm_clumps} for an illustration of different scenarios. In this case of closeness, the real graph feature vectors fit quite a precise pattern and hence the GIRG feature vector clump, though just slightly off, has little overlap.
 
-% \begin{figure}
-%     \centering
-%     \includegraphics[width=0.8\linewidth]{./figures/low_var_clump_overlaps.png}
-% \end{figure}
-
-% \begin{figure}
-%     \centering
-%     \begin{subfigure}{0.7\textwidth}
-%     \includegraphics[width=\linewidth]{./figures/low_var_clump_overlaps.png}
-%     \end{subfigure}
-%     % \vspace{3em}
-%     \begin{subfigure}{0.7\textwidth}
-%     \includegraphics[width=\linewidth]{./figures/high_var_clump_overlaps.png}
-%     \end{subfigure}
-%     \caption{From "A novel incremental one-class support vector machine based on low variance direction" - (a) and (c) illustrate my point. TODO FIX!}
-%     \label{fig:low_var_high_var_svm_clumps}
-% \end{figure}
 
 \begin{figure}
     \centering
@@ -542,7 +517,7 @@ Unfortunately classification accuracy is a crude metric. One drawback of this fr
     \centering
     % \begin{subfigure}
     \includegraphics[width=\textwidth]{./figures/Blasius_framework_table.png}
-    \caption{\cite{blasius2018towards} GGM comparison framework on Facebook graphs, extended to different GIRG models.
+    \caption{\cite{blasius2018towards} GGM realism framework results on Facebook graphs, extended to different GIRG models. Shown here are distribution based features, i.e. including mean, median, lower quartile, upper quartile and standard deviation of node level features.
     % If just one of mean/median is used, accuracies are often lower, sometimes even in $50\%-70\%$. $50\%$ is the best possible validation of a GGM as indistinguishable from real data, and is only achieved for feature set $n, m, LCC \;\text{mean}$ (by GIRGs and not the other none geometric GGMs).
     Some models are missing from the table e.g. 3d-6d GIRGs as their results follow a trend from low to high dimension.
     }
@@ -586,13 +561,21 @@ Unfortunately classification accuracy is a crude metric. One drawback of this fr
         && eff-diam & graph effective diameter\\
         \hline
     \end{tabular}
-    \caption{Graph Generative Model abbreviations; feature name abbreviations}
+    \caption{Graph Generative Model abbreviations; feature name abbreviations. Used in our results tables}
 % \end{subfigure}
 \end{sidewaysfigure}
 
 \begin{sidewaysfigure}
     \centering
     \includegraphics[width=\textwidth]{./figures/blasius_framework_means.png}
-    \caption{Blasius Framework on just mean values}
+    \caption{Blasius Framework classification results based on just mean feature values}
     \label{fig:blasius_framework_means}
+\end{sidewaysfigure}
+
+
+\begin{sidewaysfigure}
+    \centering
+    \includegraphics[width=\textwidth]{./figures/blasius_framework_means_1d_base.png}
+    \caption{Blasius Framework classification results based on just mean feature values - \q{control} here by classification against the 1d max norm torus GIRG. I.e. all GGMs are still fit to the real graph (so for GIRGs mostly having matching mean node degre and mean LCC), but now the SVM is classifying each GGM against the 1d max norm torus GIRG instead of the real graph.}
+    \label{fig:blasius_framework_means_1d_base}
 \end{sidewaysfigure}
