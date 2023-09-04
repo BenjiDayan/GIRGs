@@ -8,9 +8,9 @@ The GGM comparison framework detailed in \cref{chap:GGM} was designed to assess 
 
 An alternative framework is to try to fit a GGM model to a graph so as to compare on an edgewise and likelihood basis. There is little hope for Chung-Lu, Erdos-Renyi and Barabasi-Albert to achieve this. However the GIRG GGM has more parameters, so could fit not just $\hat{\alpha}$ to match the local clustering coefficient, $\hat{c}$ to match the number of edges, and $\hat{\tau}$ to match the degree distribution tail, but to further actually try and infer individual node weights $w_u \in \R^+$, and positions $\vec{x}_u \in \chi$. 
 
-We saw this already to some extent with the copy-weight GIRGs - where $\hat{w}_u = d_u$ is fit from the observed real graph node degrees. The $\vec{x}_u$ are much harder to fit however; for starters any maximum likelihood fit $(\hat{\vec{x}}_u)_{u \in V}$ would be rotation, reflection, and translation invariant (isometries). Finding any one maximum likelihood fit is impractical for all but the smallest graphs.
+We saw this already to some extent with the copy-weight GIRGs - where $\hat{w}_u = d_u$ is fit from the observed real graph node degrees. The $\vec{x}_u$ are however much harder to fit; for starters any maximum likelihood fit $(\hat{\vec{x}}_u)_{u \in V}$ would be rotation, reflection, and translation invariant (isometries). Finding any one maximum likelihood fit is impractical for all but the smallest graphs.
 
-In this chapter we explore the method of \textit{diffusion maps} for computationally efficiently fitting an initial good guess of the $(\vec{x}_u)_{u \in V}$ positions.
+In this chapter we explore the method of \textit{diffusion maps} for computationally efficiently fitting an initial good guess of the $(\vec{x}_u)_{u \in V}$ positions. \cite{garcia2019mercator} similarly used diffusion maps to fit a first estimate of node locations for HRGs - this seems to be key to part of their claim of their algorithm being the best HRG embedder with still reasonable $O(n^2)$ runtime. We elucidate more on the applicability/use of diffusion maps, provide some post processing techniques to improve the quality of node estimates, and propose the eigenvalues of the diffusion map as a method for determining an appropriate dimensionality $d$ for the GIRG model.
 %  and assess the expressivity of the GIRG model to precisely replicate a given real social network graph.
 
 \section{Diffusion Maps Theory}
@@ -95,7 +95,7 @@ The diffusion map representation of a node is then
 %
 The truncated diffusion map summarises the distinguishing features of a node's random walk cloud after $t$ steps, removing the tail of decaying contributions which are scaled by smaller $\lambda_{i > d+1}$,
 % by taking the scale factor of $\vec{\psi}_k$ ($\vec{\psi}_k$ itself is ignored as it's relatively normalisesd: $\vec{\psi}_k = \vec{d}^{1/2} \odot \vec{v}_k$ (TODO is this really normalised?)).
-Since $\vec{\phi}_1 = l \vec{1}$, the first coordinate is dropped as it's useless for distinguishing nodes. This corresponds to the fact that the diffusion cloud starting at any node converges as $t \to \infty$ to the same \textit{stationary distribution} $\vec{\pi}_i = \frac{d_i}{\sum_j d_j}$, the unique normalised solution to $\vec{\pi}^T M = \vec{\pi}^T$.
+Since $\vec{\phi}_1 = l \vec{1}$, the first coordinate is dropped as it's useless for distinguishing nodes. This corresponds to the fact that the diffusion cloud starting at any node converges as $t \to \infty$ to the same \textit{stationary distribution} $\vec{\pi}_i = \frac{d_i}{\sum_j d_j}$, the unique normalised solution to $M^T \vec{\pi} = \vec{\pi}$.
 
 \subsection{Improving diffusion map geometic distance preservation}
 \label{sec:diff_map_geometry}
