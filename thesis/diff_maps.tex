@@ -180,7 +180,7 @@ We can modify the naive random walk $M$ to prioritize neighbours $v$ with lower 
 \begin{align*}
   M_{uv} &\gets \frac{M_{uv} {d_v^{-\gamma}}}{\sum_{v'} M_{uv'} {d_{v'}^{-\gamma}}}
   \\
-  M &\gets D' M D^{-\gamma} \quad \text{(diagonal $D'$ normalises probabilities)}
+  \text{i.e.} \quad M &\gets D' M D^{-\gamma} \quad \text{(diagonal $D'$ normalises probabilities)}
 \end{align*}
 for some parameter $\gamma \geq 0$. This modification of transition probabilities is viewed more properly as modifying original edge weights such that $W_{uv} = k(d_u) k(d_v)$, where $k(d_u) = d_u^{-\gamma}$.
 
@@ -188,9 +188,8 @@ for some parameter $\gamma \geq 0$. This modification of transition probabilitie
 Picking $\gamma=1$ seems like a good start - in powerlaw weighted GIRGs, it counteracts the tendency for a node's neighbours to have a shifted weight distribution. In the naive approach where $W_{uv} = 1$ for $u \sim v$  model, the next state of the random walk starting at $u$ uniformly randomly samples a neighbour $v \sim u$ which then has weight distributed as a shifted power law $w_v \sim \powerlaw(\tau - 1)$; our modified random walk has $w_v \sim \powerlaw(\tau)$, matching the original node weight distribution. 
 
 Furthermore with no assumptions on the weight distribution, $\gamma=1$ also means that the random walk's stationary distribution is more like a constant $1$ distribution rather than the known $\pi_u = \frac{d_u}{\sum_v d_v} \propto d_u$ distribution.
-We can see this by using the fact that the modified node degrees is now $\tilde{d}_u = \sum_{v \sim u} d_u^{-1} d_v^{-1} = d_u^{-1} \sum_{v \sim u} d_v^{-1}$
+We can see this by using the fact that the modified node degrees is now $\tilde{d}_u = \sum_{v \sim u} d_u^{-1} d_v^{-1} = d_u^{-1} \sum_{v \sim u} d_v^{-1}$.
 % , and hence the stationary distribution has $\pi_u \propto \tilde{d}_u$.
-.
 For graphs where most nodes have a decent number of neighbours spread across lower and higher degree nodes, then $\sum_{v \sim u} d_v^{-1} = \Theta(d_u)$, and so $\tilde{\pi}_u \propto d_u^{-1} \Theta(d_u) = \Theta(1)$.
 
 A homogeneous final stationary distribution is the outcome of heat diffusion on a manifold, so is perhaps desirable.
