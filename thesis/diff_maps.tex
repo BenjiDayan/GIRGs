@@ -20,20 +20,27 @@ Diffusion Maps \cite{coifman2006diffusion} are a technique originally intended t
 This method is hence suitable for our purposes of $\vec{x}_u$ inference, as though we don't have a set of high dimensional points, we do have a simple graph $G = (V,E)$ that, like the distance kernel produced graph of diffusion maps, is assumed to have been produced by a geometry influenced process (e.g. generated from a GIRG).
 
 \paragraph{Relation to node location likelihood maximisation}
-\cite{belkin2001laplacian} presents the method of Laplacian eigenmaps, which is an interpretation of diffusion maps and shows that it's solving for the objective
-\begin{equation*}
-  \min_{X} \sum_{u, v} W_{uv} \norm{\vec{x}_u - \vec{x}_v}^2 \quad \text{subject to}\; X^T D X = I,\; X^T D\vec{1} = \vec{0} 
-\end{equation*}
-where $X \in \R^{n \times d}$ is a  matrix whose rows $\vec{x}_u \in \R^d$ are the lower dimensional node representations, and $D$ is the diagonal degrees matrix. I.e. if nodes $u, v$ are connected directly by $W_{uv} = 1$, we want that their geometric locations $\vec{x}_u, \vec{x}_v$ are close by.
+\cite{belkin2001laplacian} presents the method of Laplacian eigenmaps which is an interpretation of diffusion maps, showing that it optimises for the objective
+\begin{equation}
+  \min_{X} \sum_{u, v} W_{uv} \norm{\vec{x}_u - \vec{x}_v}^2 \quad \text{subject to}\; X^T D X = I;\; X^T D\vec{1} = \vec{0} 
+\end{equation}
+where $X \in \R^{n \times d}$ is a  matrix whose rows $\vec{x}_u \in \R^d$ are the lower dimensional node representations, and $D$ is the diagonal degrees matrix of $W$. I.e. if nodes $u, v$ are connected directly by $W_{uv} = 1$, we want that their geometric locations $\vec{x}_u, \vec{x}_v$ are close by.
 For fitting GIRG locations we would actually like to solve the objective of likelihood maximisation
-\begin{align*}
-  \max\limits_{(\vec{x}_u \in \T^d)_{u \in V}} \;
+\begin{align}
+  &\max\limits_{(\vec{x}_u \in \T^d)_{u \in V}} \;
   \sum_{u, v} W_{uv} \log p_{uv} + \overline{W}_{uv} \log \overline{p}_{uv}
   \\
-  \text{where}\; p_{uv} = \min \left \{
+  % \quad\quad
+  \text{where}\;
+  &p_{uv} = \min \left \{
     1, c \left ( \frac{w_u w_v / \sum_j w_j}{\norm{\vec{x}_u - \vec{x}_v}^d} \right )^\alpha
   \right \}
-\end{align*}
+  % p_{uv} = \min \left \{
+  %   1, c \rho_{uv}^\alpha
+  % \right \}
+  \quad \text{and}\;
+  \overline{a} = 1 - a
+\end{align}
 Although the two objectives are different, we hope that the efficiently solvable diffusion map provides a good first approximation of the maximum likelihood locations.
 
 % the second half of this method, graph $\to$ lower dim points as a computationally efficient method to discover the underlying geometry of a graph $G = (V,E)$ solely from the connectivity, assuming that it was generated from a $d$-dimensional GIRG. This allows a good initial guess at the original node locations $(\vec{x}_u)_{u \in V}$.
@@ -78,7 +85,14 @@ symmetric matrix $S$ can be done quite efficiently:
 we use \verb+scipy.sparse.linalg.eigsh+ to find the top $d+1$ eigenvalues.
 
 The biorthonormality $\langle \vec{\phi}_i, \vec{\psi}_j \rangle = \delta_{ij}$ means that $M \vec{\phi}_i = \lambda_i \vec{\phi}_i$ and $M^T \vec{\psi}_i = \lambda_i \vec{\psi}_i$. For a diffusion map representation of nodes, we order eigenvalues $\lambda_1 \geq \lambda_2 \geq ...$.
-Notably the transition matrix satisfies $M\vec{1} = \vec{1}$ since $\sum_j \frac{W_{ij}}{\deg(i)} = 1$, which can be shown to be the largest eigenvalue $\lambda_1=1$; if the graph is connected then additionally $\lambda_2 < 1$. In particular, $\vec{\phi}_1 = l \vec{1}$, some scalar multiple of the all ones vector.
+% Notably the transition matrix satisfies $M\vec{1} = \vec{1}$ since $\sum_j \frac{W_{ij}}{\deg(i)} = 1$, which can be shown to be the largest eigenvalue $\lambda_1=1$; if the graph is connected then additionally $\lambda_2 < 1$. In particular, $\vec{\phi}_1 = l \vec{1}$, some scalar multiple of the all ones vector.
+Notably the transition matrix satisfies 
+\begin{align}
+M\vec{1} &= \vec{1} \quad \text{since}\quad \sum_j \frac{W_{ij}}{\deg(i)} = 1
+\\
+&\implies \lambda_1 = 1\; \text{and} \; \vec{\phi}_1 = l \vec{1} \;\text{for some scalar}\; l
+\end{align}
+as it can be shown that $\lambda_2 < 1$ if the graph is connected, with equality only if it is disconnected.
 
 The diffusion map representation of a node is then
 \begin{align*}
@@ -115,13 +129,21 @@ $G$ has adjacency matrix $A_{ij} = \begin{cases} 1 & \text{if } u \sim v \\ 0 & 
 The naive approach is just to use $W = A$. This is a valid methodology akin to taking edge weights $1$ or $0$ between points $\vec{z}_i, \vec{z}_j$ in high dim space if they fall within some $\epsilon > 0$ distance of each other; this is the \q{Simple-Minded} variant proposed in \cite{belkin2001laplacian}. Furthermore if we wanted to make minimal assumptions on the generative process that produced $G$, beyond that edges were formed by some geometric closeness criterion, then this is probably the best approach.
 
 \subsubsection{Expected distance approach}
-The approach used by \cite{garcia2019mercator} to estimate node locations for the Hyperbolic Random Graph model uses the second \q{Heat Kernel} edge weighting variant of \cite{belkin2001laplacian}. This is specified as taking $W_{ij} = e^{-\norm{\vec{z}_i - \vec{z}_j}^2 / T}$, for some parameter $T > 0$, as adjacency matrix weights between vectors $\vec{z}_i$ in the high dim space. This is designed to optimise the discrete approximation of the continuous heat diffusion on the manifold $\cM$.
+The approach used by \cite{garcia2019mercator} to estimate node locations for the Hyperbolic Random Graph model uses the second \q{Heat Kernel} edge weighting variant of \cite{belkin2001laplacian}. This is specified as taking
+\begin{equation}
+  W_{ij} = e^{-\norm{\vec{z}_i - \vec{z}_j}^2 / T} \quad \text{for some parameter}\; T > 0
+\end{equation}
+as adjacency matrix weights between vectors $\vec{z}_i, \vec{z}_j$ in the high dim space. This is designed to optimise the discrete approximation of the continuous heat diffusion on the manifold $\cM$.
 
 The idea of \cite{garcia2019mercator} is to substitute for $\norm{\vec{z}_i - \vec{z}_j}^2$ the expected distance between nodes $u, v$ in the HRG - we can do the same for a GIRG: $\E[\norm{\vec{x}_u - \vec{x}_v}^2]$. This is our best distance guess given our assumption that $G$ is GIRG generated.
 
-If $u \sim v$, then  $E[r_{uv}^2 | w_u, w_v, u \sim v] = \Theta \left [ \left ( \frac{w_u w_v}{W} \right )^\eta \right ]$, where $\eta = \min (\frac{2}{d}, \alpha - 1)$.
+For a connected pair of nodes $u \sim v$, with weights $w_u, w_v$,
+\begin{equation}
+  E[r_{uv}^2 | w_u, w_v, u \sim v] = \Theta \left [ \left ( \frac{w_u w_v}{W} \right )^\eta \right ]
+\end{equation}
+where $\eta = \min (\frac{2}{d}, \alpha - 1)$, and we focus on the largest scaling term for simplicity.
 % assuming that $\alpha - 1 > \frac{1}{d}$, and is otherwise $\Theta \left [ \left( \frac{w_u w_v}{W} \right )^{\alpha - 1} \right ]$.
-We can use the node weight estimates by degree of $\hat{w}_u = d_u$ to get distance estimates $\hat{r}_{uv}^2 = \left ( \frac{w_u w_v}{W} \right )^{\min(2/d, \alpha - 1)}$. Finally edge weights are $W_{uv} = e^{-\hat{r}_{uv}^2 / T}$, i.e. decaying with predicted distance.
+We can use the node weight estimates of $\hat{w}_u = d_u$ to get distance estimates $\hat{r}_{uv}^2 = \left ( \frac{w_u w_v}{W} \right )^{\min(2/d, \alpha - 1)}$. Finally edge weights are $W_{uv} = e^{-\hat{r}_{uv}^2 / T}$, i.e. decaying with predicted distance.
 
 % \begin{align*}
 % p(r_{uv} | w_u, w_v, u \sim v) 
@@ -177,26 +199,26 @@ The final approach we consider acts similarly to the expected distance approach,
 
 Again we take $d_u$ as the estimated weight $\hat{w}_u$ of node $u$. 
 We can modify the naive random walk $M$ to prioritize neighbours $v$ with lower degree $d_v$ via
-\begin{align*}
+\begin{align}
   M_{uv} &\gets \frac{M_{uv} {d_v^{-\gamma}}}{\sum_{v'} M_{uv'} {d_{v'}^{-\gamma}}}
   \\
   \text{i.e.} \quad M &\gets D' M D^{-\gamma} \quad \text{(diagonal $D'$ normalises probabilities)}
-\end{align*}
+\end{align}
 for some parameter $\gamma \geq 0$. This modification of transition probabilities is viewed more properly as modifying original edge weights such that $W_{uv} = k(d_u) k(d_v)$, where $k(d_u) = d_u^{-\gamma}$.
 
 
-Picking $\gamma=1$ seems like a good start - in powerlaw weighted GIRGs, it counteracts the tendency for a node's neighbours to have a shifted weight distribution. In the naive approach where $W_{uv} = 1$ for $u \sim v$  model, the next state of the random walk starting at $u$ uniformly randomly samples a neighbour $v \sim u$ which then has weight distributed as a shifted power law $w_v \sim \powerlaw(\tau - 1)$; our modified random walk has $w_v \sim \powerlaw(\tau)$, matching the original node weight distribution. 
+Intuitively, picking $\gamma=1$ seems like a good start - in powerlaw weighted GIRGs, it perfectly counterbalances the tendency for a node's neighbours to have a shifted weight distribution. In the naive approach where $W_{uv} = 1$ for $u \sim v$  model, the next state of the random walk starting at $u$ uniformly randomly samples a neighbour $v \sim u$ which then has weight distributed as a shifted power law $w_v \sim \powerlaw(\tau - 1)$; our modified random walk has $w_v \sim \powerlaw(\tau)$, matching the original node weight distribution. 
 
-Furthermore with no assumptions on the weight distribution, $\gamma=1$ also means that the random walk's stationary distribution is more like a constant $1$ distribution rather than the known $\pi_u = \frac{d_u}{\sum_v d_v} \propto d_u$ distribution.
-We can see this by using the fact that the modified node degrees is now $\tilde{d}_u = \sum_{v \sim u} d_u^{-1} d_v^{-1} = d_u^{-1} \sum_{v \sim u} d_v^{-1}$.
-% , and hence the stationary distribution has $\pi_u \propto \tilde{d}_u$.
-For graphs where most nodes have a decent number of neighbours spread across lower and higher degree nodes, then $\sum_{v \sim u} d_v^{-1} = \Theta(d_u)$, and so $\tilde{\pi}_u \propto d_u^{-1} \Theta(d_u) = \Theta(1)$.
+Furthermore with no assumptions on the weight distribution, $\gamma=1$ also means that the random walk's stationary distribution over the nodes is more like a constant $\propto \vec{1}$ distribution rather than the known $\pi_u = \frac{d_u}{\sum_v d_v} \propto d_u$ distribution.
+We can see this by using the fact that the modified node degrees is now $\widetilde{d}_u = \sum_{v \sim u} d_u^{-1} d_v^{-1} = d_u^{-1} \sum_{v \sim u} d_v^{-1}$.
+% , and hence the stationary distribution has $\pi_u \propto \widetilde{d}_u$.
+Informally, for graphs where most nodes have a decent number of neighbours spread across lower and higher degree nodes, which includes our powerlaw degree sequenced GIRGs, then $\sum_{v \sim u} d_v^{-1} = \Theta(d_u)$, and so $\widetilde{\pi}_u \propto d_u^{-1} \Theta(d_u) = \Theta(1)$.
 
 A homogeneous final stationary distribution is the outcome of heat diffusion on a manifold, so is perhaps desirable.
 
 
 \subsubsection{Bounded diffusion hop distances}
-Another angle to view how our three different $W$ weighting approaches might produce diffusion map point embeddings that better preserve original geometric distances is the expected diffusion hop distance. In order to achieve distance preserving diffusion map point inference, we want the diffusion process to closely match brownian motion on the original manifold, in our case the geometric space $\chi = [0,1]^d$. Consider one random walk step starting at node $u$ and choosing a neighbour $v \sim u$ to transition to. While the direction in which we go is roughly random (e.g. for $\chi=[0,1]^2$ a 2d square, any neighbour $v \sim u$ is relatively positioned with $\vec{x}_v - \vec{x}_u$ having an angle $\theta \in [0, 2\pi)$ uniformly randomly), the distance we travel is not uniformly distributed. For our random walk to approximate brownian motion we want the hop distance $r_{u_t u_{t+1}}$ to have \textit{finite variance}. 
+Another angle to view how our three different $W$ weighting approaches might produce diffusion map point embeddings that better preserve original geometric distances is the expected diffusion hop distance. In order to achieve distance preserving diffusion map point inference, we want the diffusion process to closely match brownian motion on the original manifold, in our case the geometric space $\chi = [0,1]^d$. Consider one random walk step starting at node $u$ and choosing a neighbour $v \sim u$ to transition to. While the direction in which we go is roughly random (e.g. for $\chi=[0,1]^2$ a 2d square, any neighbour $v \sim u$ is relatively positioned with $\vec{x}_v - \vec{x}_u$ having an angle $\theta \in [0, 2\pi)$ uniformly randomly), the distance we travel is not uniformly distributed. For our random walk to approximate brownian motion we want the \q{hop distance} $r_{u_t u_{t+1}}$ to have \textit{finite variance}. 
 
 \paragraph{Rescaled geometric space}
 For $\chi = [0,1]^d$ hops are of course bounded to be finite; we actually have to view the GIRG in a new lens for this argument to make sense.
@@ -206,8 +228,8 @@ Without going too much into detail, a GIRG can be equivalently formulated by rep
 This means that as we increase $n \to \infty$, the uniformly distributed node points don't get more tightly packed into the $[0, 1]^d$ cube, instead they're always spaced with mean density of occupying $1$ unit of volume per point.
 
 
-
-We can also quantify the expected random step distance in $\chi$-space. If the starting state is node $u$ at timestep $0$, and we transition to node $v$ in the first hop (necessarily $v \sim u$ is a neighbour), then $E[r_{uv} | w_u, u \to v]$ is the expected distance travelled in $\chi$-space due to our transition.
+We wish to calculate the expected squared hop distance in the rescaled $\chi$-space, $E[r_{uv}^2 | w_u, u \to v]$, where $u \to v$ is the event that we transition from node $u$ to $v$ in one step of the random walk. First ingredients we need:
+% We can also quantify the expected random step distance in $\chi$-space. If the starting state is node $u$ at timestep $0$, and we transition to node $v$ in the first hop (necessarily $v \sim u$ is a neighbour), then $r_{uv}$ is the distance travelled in $\chi$-space due to our transition, our \q{hop distance}.
 \begin{align*}
   &E[r_{uv}^2 | w_u, w_v, u \sim v] = \Theta(w_v^\eta)
   && \text{where $\eta = \min(\frac{2}{d}, \alpha - 1)$, dropping factors of $w_u$}
@@ -238,7 +260,7 @@ And finally, for each of the differente adjacency matrix weighting schemes,
   \end{cases}
 \end{align*}
 Putting this together we have a formula for the expected hop distance in one discrete timestep of the diffusion process
-\begin{align*}
+\begin{align}
   &E[r_{uv}^2 | w_u, u \to v]
   \\ 
   &= \int_1^\infty E[r_{uv}^2 | w_u, u \to v, w_v=w] p(w_v = w | w_u, u \to v) dw
@@ -255,7 +277,7 @@ Putting this together we have a formula for the expected hop distance in one dis
   % \Theta(e^{-w^{2/d}} w^{1 - \tau}) dw
   % \;
   % < \infty
-\end{align*}
+\end{align}
 In the naive approach, similarly to how $\int_1^\infty x^{\beta} dx$ is bounded if $\beta < -1$, if $1 + \eta - \tau > -1$ then the hop distance is unbounded, i.e. if $\tau < 2 + \min(\frac{2}{d}, \alpha - 1)$. This is eminently possible for $\tau \in (2, 3)$. The expected distance approach has no problems as $\exp(-K w^{2/d})$ decays swiftly, however in the homogeneous approach taking $\gamma = \min(\frac{2}{d}, \alpha -1)$ would guarantee bounded hop distances for all $\tau \in (2, 3)$, as $2 - \tau < 1$.
 
 % Which is bounded, unlike in the original naive approach where
@@ -351,9 +373,9 @@ This modification of transition probabilities is viewed more properly as modifyi
 
 Picking $\gamma=1$ seems like a good start - in powerlaw weighted GIRGs, it counteracts the tendency for a node's neighbours to have a shifted weight distribution. I.e. in the base $W_{uv} = 1$ for $u \sim v$  model, the next state of the random walk starting at $u$ uniformly randomly samples a neighbour $v \sim u$ which then has weight $w_v \sim \powerlaw(\tau - 1)$; our modified random walk has $w_v \sim \powerlaw(\tau)$, matching the original node weight distribution. With no assumptions on the weight distribution, it should also mean that the random walk stationary distribution is more like a constant $1$ distribution rather than the known $\pi_u \propto d_u$ distribution.
 
-We can see this by using the fact that the modified weighted degree is now $\tilde{d}_u = \sum_{v \sim u} d_u^{-1} d_v^{-1} = d_u^{-1} \sum_{v \sim u} d_v^{-1}$, and hence the stationary distribution has $\pi_u \propto \tilde{d}_u$. For graphs where most nodes have a decent number of neighbours spread across lower and higher degree nodes, then $\sum_{v \sim u} d_v^{-1} = \Theta(d_u)$, and so $\pi_u \propto d_u^{-1} d_u = 1$. A simplification is to say that a node $u$ in the GIRG with $50$ neighbours then has 
+We can see this by using the fact that the modified weighted degree is now $\widetilde{d}_u = \sum_{v \sim u} d_u^{-1} d_v^{-1} = d_u^{-1} \sum_{v \sim u} d_v^{-1}$, and hence the stationary distribution has $\pi_u \propto \widetilde{d}_u$. For graphs where most nodes have a decent number of neighbours spread across lower and higher degree nodes, then $\sum_{v \sim u} d_v^{-1} = \Theta(d_u)$, and so $\pi_u \propto d_u^{-1} d_u = 1$. A simplification is to say that a node $u$ in the GIRG with $50$ neighbours then has 
 \begin{align}
-  \tilde{d}_u = \frac{1}{50} \sum_{v \sim u} d_v^{-1} \approx \sim  \frac{1}{50}
+  \widetilde{d}_u = \frac{1}{50} \sum_{v \sim u} d_v^{-1} \approx \sim  \frac{1}{50}
 % \left [ 50\, \theta + \sqrt{50}\, \theta' N(0, 1) \right ]
 N(50\, \theta, 50 \, \sigma^2)
 = \theta + \sigma \frac{N(0, 1)}{\sqrt{50}} \approxeq \theta
@@ -611,7 +633,10 @@ Real graphs' diffusion maps are often quite non-uniformly located points, with s
 That \cref{fig:cube_diffmap_plots_d2} looks almost perfectly 45 degree rotated could potentially be explained as the diffusion map trying to maximise diffusion explainability - the long square diagonal has overall more diffusion along it so might be picked up as a major eigenvalue - maybe a small imbalance of more nodes in one corner can cause this. Even assuming no overall rotation bias, you're going to get a square rotated somewhere between $0$ and $45$ degrees.
 
 \paragraph{Distorted GIRGs make cuboidal diffusion map embeddings} In practice, real graphs never have a perfectly equal balance in geometric dimension importance. 
-We introduced distorted GIRGs in \cref{subsec:distorted_girgs} as a possible model for this, where for example the distance function could be the weighted Euclidean norm in 2d: $\norm{x - y}^2 = a (x_1 - y_1)^2 + b(x_2 - y_2)^2$. If $a > b$, even just by a little amount, then the first diffusion map coordinate $\varphi_1(u)$ is likely to be very similar to $(\vec{x}_u)_1$. Only if $a=b$ is there no preference between $(\vec{x}_u)_1$ and $(\vec{x}_u)_2$, making a rotation possible.
+We introduced distorted GIRGs in \cref{subsec:distorted_girgs} as a possible model for this, where for example the distance function could be the weighted Euclidean norm in 2d:
+\begin{equation}\norm{x - y}^2 = a (x_1 - y_1)^2 + b(x_2 - y_2)^2
+\end{equation}
+If $a > b$, even just by a little amount, then the first diffusion map coordinate $\varphi_1(u)$ is likely to be very similar to $(\vec{x}_u)_1$. Only if $a=b$ is there no preference between $(\vec{x}_u)_1$ and $(\vec{x}_u)_2$, making a rotation possible.
 Hence the points $(\varphi_1(u), \varphi_2(u))_{u \in V}$ are likely to end up as a rectangle, not a rotated square; the variation in first coordinate will be greater than in the second.
 
 \cref{fig:2d_distorted_major} shows the 2d diff map embedding of such a distorted 2d cube GIRG. Note that the major coordinate is much easier to fit well, whereas the minor one has higher error (NB the diff map embedding of $x_2$ is negatively scaling with the true value which is fine - we can never guarantee same signs).

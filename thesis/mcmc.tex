@@ -26,7 +26,7 @@ In our case $Q(\theta) = p(G | (\vec{x}_u)_{u \in V}) p((\vec{x}_u)_{u \in V})$,
 \begin{align}
   & Q(\theta) \propto \prod_{(u,v) \in {V \choose 2}} p_{uv} | w_u, w_v, x_u, x_v, \alpha, c, G
   \\
-  \text{easily marginalised as} \quad & Q_u(\theta_u) = \prod_{v \neq u} p_{uv} | ...
+  \text{marginalised as} \quad & Q_u(\theta_u) = \prod_{v \neq u} p_{uv} | ...
 \end{align}
 % which is easily marginalised as $Q_u(\theta_u) = \prod_{v \neq u} p_{uv} | ...$.
 % This lends well to Gibb's sampling - we need concentrate only on $Q_u(\theta_u) = \prod_{v \neq u} p(e(u,v) | ...)$.
@@ -127,7 +127,11 @@ for mixture probability $0 \leq \eta \leq 1$. This should not be seen strictly a
 The intuitive social network interpretation of a GIRG Chung-Lu mixture model is that it allows for some \q{random} friendships - ones that wouldn't normally have been predicted by the GIRG model. For instance if you happen to sit next to a stranger on a plane, as long as they don't fall into a sworn enemy category you may still add them as a facebook friend with a vague promise of staying in touch. Of course you and the stranger must bear at least some small similarity to have been on the same plane, but this would likely need a very high dimensional GIRG model to be fully captured. 
 
 
-With these two new parameters $f$ and $\eta$, the augmented GIRG model does have a higher specific fit likelihood than the Chung-Lu model: $p(G | \hat{\theta}_{GIRG}, \cG_{GIRG}) > p(G | \hat{\theta}_{CL}, \cG_{CL})$. In a holistic MCMC setup these two parameters could also have a prior and be sampled from the posterior, but for simplicity we set them to $f=0.3, \eta=0.5$, which perform reasonably. See \cref{fig:mcmc_runs} for some likelihood convergence curves on some example graphs. If we don't use a failure rate and mixture probability, the MCMC actually converges to a perverse set of node locations that are almost uniform, i.e. striving to be far apart, due to the high penalty cost of short non-edges.
+With these two new parameters $f$ and $\eta$, the augmented GIRG model does have a higher specific fit likelihood than the Chung-Lu model:
+\begin{equation}
+  p(G | \hat{\theta}_{GIRG}, \cG_{GIRG}) > p(G | \hat{\theta}_{CL}, \cG_{CL})
+\end{equation}
+In a holistic MCMC setup these two parameters could also have a prior and be sampled from the posterior, but for simplicity we set them to $f=0.3, \eta=0.5$, which perform reasonably. See \cref{fig:mcmc_runs} for some likelihood convergence curves on some example graphs. If we don't use a failure rate and mixture probability, the MCMC actually converges to a perverse set of node locations that are almost uniform, i.e. striving to be far apart, due to the high penalty cost of short non-edges.
 
 
 % TODO Must input graphs here hold up
@@ -212,7 +216,7 @@ With these two new parameters $f$ and $\eta$, the augmented GIRG model does have
 \subsection{Percent Edges Captured Metric Comparison}
 A good and simple framework to compare quality of fit without taking into account increased parametrisation is to analyse the \q{accuracy} on successfully producing edges / non-edges.
 
-Our MCMC posterior is constrained by directly fitting $\hat{c}$ to produce a similar number of edges $|E|$ as in the real graph. Hence in the standard classification confusion matrix
+Our MCMC posterior is constrained by directly fitting $\hat{c}$ to produce a similar number of edges $|E|$ as in the real graph. Hence in the standard classification confusion matrix of true/false positives/negative edge classifications
 \begin{equation}
   \begin{array}{|c|c|}
     \hline
@@ -238,8 +242,7 @@ After each round of point updates, $\alpha$ is fit to maximise the likelihood, a
 
 
 \subsection{Ideas for speeding up convergence}
-TODO Finish writing this section!!!
-
+% TODO Finish writing this section!!!
 In fact the Mercator method doesn't do rounds of point updates, they are confident in node locations after just one round. \cite{boguna2010sustaining} similarly seeks to minimise computation by only doing iterative Metropolis-Hastings updates on higher degree nodes - fitting locations for lower degree nodes just once. Both papers deal with fittig HRGs; unfortunately higher dimensioned GIRGs have even more issues with speed of fitting locations due to an expanded search space. We present some ideas for speeding up convergence in a related vein that could be explored more in future work.
 
 \paragraph{Gradient based point proposals}

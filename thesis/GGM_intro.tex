@@ -26,9 +26,9 @@ A graph $G = (V,E)$ is said to be randomly generated from a GGM $\cG$, written $
 
 Fitting $\hat{\theta}$ can also be done by likelihood estimation. This is tractable for the Erdos-Renyi GGM, by solving $\argmin_p \sum_{u \neq v} e_{uv} \log(p) + (1 - e_{uv}) \log( 1 - p)$, where $e_{uv}$ is the edge indicator function, which gives the same $\hat{p}$ as above. For GIRGs however, this would be intractable: for example we cannot even easily integrate over all possible point locations in the geometric space:
 
-\begin{equation*}
+\begin{equation}
     p(G | \alpha, \vec{w}, d) = \int_{\vec{x}_1 \in [0,1]^d} \cdots \int_{\vec{x}_n \in [0,1]^d} p(G | \alpha, (\vec{x}_i)_{i=1}^n) \prod_{i=1}^n p(\vec{x}_i)
-\end{equation*}
+\end{equation}
 
 Instead we can use a heuristic method based on \textit{Approximate Bayesian Computation (ABC)}. We seek the parameter $\hat{\theta}$ that minimises the expected distance $ \E[\delta(G, G' \sim \cG(\theta))]$ for some distance metric $\delta$. This basically means that the GGM parametrised by $\hat{\theta}$ successfully generates graphs $G'$ that look similar to our given graph $G$.
 For $\delta$ to be effective, ideally it would be something like $(f(G) - f(G'))^2$, for $f$ a sufficient statistic of $\theta$. In practice this looks like an algorithm where we repeatedly sample $\theta$ from a prior; use it to generate $G'$; see if $f(G') \approxeq f(G)$, and if so keep $\theta$ as a candidate for $\hat{\theta}$.
@@ -58,7 +58,7 @@ Performing this classification task over the whole dataset of graphs allows for 
 
 
 % This gives us a mirrored real/fake graph features dataset: $\{\vec{\fclass}_i (G)  = \vec{\fclass}(G_i)$ for feature vector function $\vec{\fclass}$, against $\vec{\fclass}_i$.
-The output of the Blasius framework, for a given GGM and classification feature vector $\fclass$, is a real/fake accuracy percentage. If it were really the case that the input real-graphs were generated from $G_i \sim \cG(\theta^*_i)$ of the same GGM $\cG$ as the fitted fake graphs, the SVM should be able to acheive only close to $50\%$ accuracy, as real and fake $\fclass$ should be hard to tell apart. Higher accuracies denote distinguishability of real from fake - occuring if instead $G_i \sim \tilde{\cG}(\phi^*_i)$ for some alternative GGM $\tilde{\cG}$.
+The output of the Blasius framework, for a given GGM and classification feature vector $\fclass$, is a real/fake accuracy percentage. If it were really the case that the input real-graphs were generated from $G_i \sim \cG(\theta^*_i)$ of the same GGM $\cG$ as the fitted fake graphs, the SVM should be able to acheive only close to $50\%$ accuracy, as real and fake $\fclass$ should be hard to tell apart. Higher accuracies denote distinguishability of real from fake - occuring if instead $G_i \sim \widetilde{\cG}(\phi^*_i)$ for some alternative GGM $\widetilde{\cG}$.
 
 
 % Contextually, GIRGs are compared with other generative graph models: Erdos-Renyi (ER), Barabasi-Albert (BA) preferential attachement graphs, Chung-Lu and hyperbolic graphs.
@@ -89,7 +89,7 @@ before fitting $\cG$ to it. Then $n$ is just the number of remaining nodes.
 
 % This is not because the GIRG model always generates connected graphs, which is not true. 
 
-Blasius' rational is that where some real graphs in our dataset have disconnected subgraphs, this may be due to them being a concatenation of a few distinctly generated subraphs, hence a GGM should be fit just to one subgraph (the largest - the rest are discarded for potentially being too small). All of our GGMs are capable of producing a bunch of disconnected subgraphs, however this is most likely to occur in our geometric GGMs which exhibit clustering; GIRGs do at least whp produce a unique giant component - one with a linear number of nodes. Hence for a fair comparison $d(G, G')$, we also need to post-process the GGM generated $G' \gets \shrinktogcc(G')$. 
+Blasius' rational is that where some real graphs in our dataset have disconnected subgraphs, this may be due to them being a concatenation of a few distinctly generated subraphs, hence a GGM should be fit just to one subgraph (the largest - the rest are discarded for potentially being too small). All of our GGMs are capable of producing a bunch of disconnected subgraphs, however this is most likely to occur in our geometric GGMs which exhibit clustering; GIRGs do at least whp produce a unique giant component - one with a linear number of nodes. Hence for a fair comparison between $G$ and $G'$, we also need to post-process the GGM generated $G' \gets \shrinktogcc(G')$. 
 
 Blasius's only geometric model is Hyperbolic Random Graphs, for which they use a fitting algorithm that actually estimates a higher number of nodes $n > |V|$ in order to approximately have the largest connected component of $G' \sim \cG$ be of size $|V|$.
 We don't do this for our GIRGs however, as we find this algorithm prone to error, and unnecessary, at least for the socfb Facebook graphs - see \cref{tab:blasius_HRG_n_fitting_renunciation}. We accept instead that our GGMs may end up with slightly fewer nodes than the real graphs, and hope that this doesn't affect the SVM classification too much.
@@ -173,9 +173,13 @@ Note that GIRGs might still do the best job, compared to other non geometric GGM
 \subsection{Fitting power law distribution exponent $\tau$ for node weight sampling}
 We fit $\tau$ to the tail of the \textit{degree distribution} of $G$, using the python package $\PLP$. Having this fit parameter enables subsequent generation of new weight sequences $w_u \sim \powerlaw(\tau)$ for sampling new GIRGs $G' \sim \cG_{\GIRG}(\tau,...)$.
 
-\paragraph{The degree distribution} of the graph $G$ is defined as $dd(x) := \frac{|\{v \in V: d(v) = x\}|}{|V|}$, i.e. the fraction of nodes with degree $x$. For graphs generated by the GIRG model, we noted that the geometry marginalisation property means that $E[d_u] \propto w_u$. Hence if node weights are distributed following $\powerlaw(\tau)$, we expect to see the tail of the degree distribution, $dd(x)$ as $x \to n$ to look like a discrete power law distribution $dd(x) \propto x^{-\tau}$.
+\paragraph{The degree distribution} of the graph $G$ is defined as
+\begin{equation}
+    dd(x) := \frac{|\{v \in V: d(v) = x\}|}{|V|}
+\end{equation}
+i.e. the fraction of nodes with degree $x$. For graphs generated by the GIRG model, we noted that the geometry marginalisation property means that $E[d_u] \propto w_u$. Hence if node weights are distributed following $\powerlaw(\tau)$, we expect to see the tail of the degree distribution, $dd(x)$ as $x \to n$ to look like a discrete power law distribution $dd(x) \propto x^{-\tau}$.
 
-\paragraph{Sketch of why GIRG power law weights \textrightarrow\ power law degree distribution}  
+\paragraph{Informal sketch of why GIRG power law weights \textrightarrow\ power law degree distribution}  
 % that $dd(x) \approxeq P(d_u = x) \approxeq P(w_u = x) \propto x^{-\tau}$.
 By treating node degrees as roughly iid, $dd(x) \stackrel{n \to \infty}{\to} P(d_u = x)$.
 For a fixed weight $w_u$, node degree $d_u$ closely follows a binomial distribution $\binomial(n-1, \Theta(w_u / n))$, so we'd like to calculate 
@@ -211,7 +215,7 @@ Hence $dd(x) \stackrel{n \to \infty}{\to} \Theta(x^{-\tau})$ for large $x$.
 % % (I get the $p_u, w_u$ bit, but not the $d_u$?).
 % This means that $\E[d_u] = \Theta(w_u)$, and so $\E[dd(x)] = \E[ \frac{ \sum_u 1_{d_u = x}}{n}] = \E[d_u = x]$. This we can calculate as $\int_w P(w_u = w) P(d_u = x | w_u = w)dw = \int_w w^{-\tau} \PP(\Poisson(\Theta(w)) = x) dw$. It's essentially the inner product (integral of product) of two probability distributions, the first is $w^{-\tau}$, the second is a Gaussian looking like function with mean and variance $\Theta(w)$, and hence to first order the integral is $\Theta(w^{-\tau})$ (e.g. if you changed the gaussian integral to have the same mean $w$ but variance squeezed $\sigma^2 \to 1$ as to be like a delta function). It follows that for large $x$, $\E[dd(x)] = \Theta(x^{-\tau})$.
 
-\paragraph{powerlaw package fitting}
+\paragraph{Python powerlaw package}
 Therefore if $G$ is a $\tau$ exponent power law weighted GIRG , we expect its degree distribution $dd(x)$ for large degrees $x$ to look like $dd(x) \propto x^{-\tau}$. Hence we can fit $\tau$ on this tail. \PLP does this by simultaneously finding a lower bound $x_{\min}$ for where in the tail the power law behaviour starts, and fitting $\tau$ to the region $x > x_{\min}$ using maximum likelihood estimation\footnote{A visually much more compelling method of fitting the power law degree distribution tail is to plot the empirical degree distribution on a log-log scale, and literally draw a line of best fit on the heavy tail - $w^{-\tau}$ will look like a straight line with gradient $-\tau$. In fact one minus the empirical cdf is even better as it looks like $w^{1-\tau}$, so a similar log-log linear fit works to find $\tau$, and the plotted points are more robust to noise}. The optimal $x_{\min}$ is chosen to minimise the Kolmogorov-Smirnov distance between the power law fit and the region's emprirical degree distribution.
 
 Having fit $\tau$, we can then sample weights $w_u \sim \powerlaw(\tau)$.
@@ -289,7 +293,10 @@ Fitting $\alpha \gets \hat{\alpha}_i$ based on LCC is precisely ABC like - we pr
     \label{eq:expected_edge_degree}
     \E[\overline{deg}(G') | c] = c A + c^{1/\alpha} B
 \end{equation}
-Hence we just have to numerically solve \cref{eq:expected_edge_degree} for $\hat{c}: \E[\overline{deg}(G') | \hat{c}] = \overline{deg}(G) = 2 |E|/|V|$ in order to obtain our desired average degree. Blasius provides C++ code for this, which finds $\hat{c}$ with a binary search.
+Hence we just have to numerically solve \cref{eq:expected_edge_degree} for
+\begin{equation}
+    \hat{c}:\; \E[\overline{deg}(G') | \hat{c}] = \overline{deg}(G) = 2 |E|/|V|
+\end{equation} in order to obtain our desired average degree. Bl{\"a}sius provides C++ code for this, which finds $\hat{c}$ with a binary search.
 
 The expected average degree formula of \cref{eq:expected_edge_degree} miraculously holds for all volume based toroidal GIRGs (regardless of exact disance function $r(x_u, x_v) = r_{uv}$), and we can even adapt the formula to be independent of dimension $d$.
 
@@ -308,7 +315,7 @@ The expected average degree formula of \cref{eq:expected_edge_degree} miraculous
 % For example in the $\infty$-norm, $Vol(r_{uv}) = (2r_{uv})^d$ as a cube with side-length $2r_{uv}$.
 
 % Having volume in the edge probability formula is actually a generalisation of taking $r_{uv}$ to the dth power - the point being to make $p(u \sim v | x_u, w_u, w_v) = E_r[p_{uv}(r)] = \Theta(w_u w_v/n)$, regardless of dimension.
-In this subsection we calculate $E_r[p_{uv}(r) | c]$ in a volume formulated GIRG, whose volume function is denoted $Vol(r)$ (could correspond to any of max norm, euclidean norm, MCD etc.), and arbitrary dimension $d$ torus geometry $\chi = \T^d$.
+In this subsection we calculate $E_r[p_{uv}(r) | c]$ for fixed weights $w_u, w_v$ in a volume formulated GIRG, whose volume function is denoted $Vol(r)$ (could correspond to any of max norm, euclidean norm, MCD etc.), and arbitrary dimension $d$ torus geometry $\chi = \T^d$.
 
 Given a fixed weight sequence $(w_u)_{u \in V}$ we will recover \cref{eq:expected_edge_degree} via 
 \begin{equation}
@@ -317,8 +324,10 @@ Given a fixed weight sequence $(w_u)_{u \in V}$ we will recover \cref{eq:expecte
 % We'll derive the same resultant $p(u \sim v | w_u, w_v) = \E_r[p_{uv}(r)]$ regardless, relying only on the fact that $Vol(r)$ is an increasing function. Finally, $\E[d_u] = \sum_v p(u \sim v | w_u, w_v)$ and hence $\E[\overline{deg}] = \sum_u \E[d_u]$.
 Now $E_r[p_{uv}(r)] = \int_r p_{uv}(r) p(r) dr$. We'll break this down into $\int_{r: \rho_{uv} \geq 1} + \int_{r: \rho_{uv} < 1}$ (short edges and long edges, corresponding to edge probabilities being capped at 1, or strictly less than one for larger inter node distances) and write $\hat{r} : Vol(\hat{r}) = c^{1/\alpha} \left ( \frac{w_u w_v}{W} \right )$ as the boundary at which $\rho_{uv} = 1$.
 
-Hence we get $E_r[p_{uv}(r)] = \int_0^{\hat{r}} p(r) dr + \int_{\hat{r}}^{r_{\max}} p_{uv}(r) p(r) dr$.
-
+Hence we get
+\begin{equation}
+    E_r[p_{uv}(r)] = \int_0^{\hat{r}} p(r) dr + \int_{\hat{r}}^{r_{\max}} p_{uv}(r) p(r) dr
+\end{equation}
 Substituting $Vol = Vol(r);\; dr = dVol \frac{dr}{dVol} = \frac{dVol}{p(r)}$, we get:
 \begin{align}
     E_r[p_{uv}(r)] =& 
@@ -370,9 +379,9 @@ In \cref{fig:blasius_framework_table} we present results of the harder classific
 \begin{itemize}
     \item The \q{base} GIRG type is max norm torus GIRGs of dimension $d=1,2,...,7$
     \item MCD torus GIRGs for $d=2,3,4,5$ ($d=1$ is equivalent to max norm)
-    \item Min/max mixed torus GIRGs with groupings 1-23; 1-234; 12-34; 1-2-34. E.g. 1-23 denotes $\norm{\vec{x} - \vec{y}} = \min \left \{ |x_1 - y_1|_C,\; \max(|x_2 - y_2|_C,\, |x_3 - y_3|_C) \right \}$
+    \item Min/max mixed torus GIRGs with groupings 1-23; 1-234; 12-34; 1-2-34. E.g. 1-23 denotes $\norm{\vec{x} - \vec{y}} = \min \left \{ |x_1 - y_1|_\T,\; \max(|x_2 - y_2|_\T,\, |x_3 - y_3|_\T) \right \}$
     \item Max norm cube GIRGs. We were held back due to the increased computation when fitting the average degree with constant $c$, so only include  $d=1,2,3$ cube GIRGs, and $d=1,2,3,4,5$ copy-weight cube GIRGs (an attempt for maximal realism)
-    \item The host of simpler models CL (with power law fit weights, and with degree copied weights), BA, ER as in \cite{blasius2018towards}, as well as Hyperbolic random graphs which are very similar to 1d torus GIRGs
+    \item The host of simpler models CL (with power law fit weights, and with degree copied weights), BA, ER as in \cite{blasius2018towards}, as well as HRGs which are very similar to 1d torus GIRGs
 \end{itemize}
 
 \paragraph{New classification features}
@@ -409,7 +418,7 @@ Chung-Lu graphs are a good comparison point against GIRGs by being a similarly d
 
 Among non-copy-weight GIRGs, 1d max torus GIRGs are surprisingly best or close to best on many feature sets. This is evidence that the geometric component of real graphs is strongest in just one dimension, which we also see in \cref{chap:likelihood_point_estimation}. It would be interesting to see if 2d or 3d distorted GIRGs could do better on these features, as they would precisely exhibit geometry with one dominating dimension, and a few auxiliary ones.
 On betweenness, 1d max torus GIRGs perform the best, with a slight decay for 2d-4d. Mixed GIRGs hold up well, but MCD GIRGs do much worse; cube GIRGs are only a little worse.
-However MCD and mixed GIRGs do better on closeness than max GIRGs, especially 1-23 mixed GIRGs. This is actually evidence for the \q{one strong dimension} hypothesis, as 1-23 mixed GIRGs give more significance to their dim 1 over dims 2,3. We can even observe in \cref{fig:blasius_framework_means_1d_base} that 1-234 mixed GIRGs have such a strong force of their first dimension that they are hard to classify apart from 1d max torus GIRGs!
+However MCD and mixed GIRGs do better on closeness than max GIRGs, especially 1-23 mixed GIRGs. This is actually evidence for the \q{one strong dimension} hypothesis, as 1-23 mixed GIRGs give more significance to their dim 1 over dims 2,3. We can even observe in \cref{fig:blasius_framework_means_1d_base} that 1-234 mixed GIRGs have such a strong force from their first dimension that they are hard to classify apart from 1d max torus GIRGs!
 
 \paragraph{Effective diameter and cube GIRGs}
 Cube GIRGs generally underperform, except on effective diameter, where they shine through as the best, with ranking 1cu\textless 2cu\textless 3cu. This makes sense as cube geometry doesn't impact many shortest paths, but rather does so on the longest shortest paths, between nodes at opposite extremes of the cube which would otherwise be shortcutted by the torus. We can dive into the data to see that our intuition seems correct: real effective diameters of FB graphs range from $3.0$ to $4.4$; 2d torus GIRGs' are too small, on average $0.17$ less than their real counterparts, while 2d cube GIRGs' are larger and on average just $0.04$ less.
@@ -529,16 +538,16 @@ Classification accuracy is regrettably a crude metric. One limitation of this fr
     % \begin{subfigure}
     \begin{tabular}{|c|c||c|c|}
         \hline
-        1-ccu & 1d copy-weight cube GIRG 
-        & betw & betweenness centrality
+        1ccu & 1d copy-weight cube GIRG 
+        & betw & node betweenness centrality
         \\
         1-23 & $1 \lor (2 \land 3)$ mixed min/max GIRG
         & k-core & node k-core number
         \\
-        2-min & $1 \lor 2$ 2d min GIRG
-        & close & closeness centrality
+        2m & $1 \lor 2$ 2d min GIRG
+        & close & node closeness centrality
         \\
-        3-cu & 3d cube GIRG
+        3cu & 3d cube GIRG
         & LCC & node local clustering coefficient
         \\
         7d & 7d GIRG
@@ -559,7 +568,7 @@ Classification accuracy is regrettably a crude metric. One limitation of this fr
         hyper & Hyperbolic Random Graph &
         diam & graph diameter
         \\
-        && eff-diam & graph effective diameter\\
+        && eff-diam & effective graph diameter\\
         \hline
     \end{tabular}
     \caption{Graph Generative Model abbreviations; feature name abbreviations. Used in our results tables}

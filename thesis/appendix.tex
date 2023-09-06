@@ -116,10 +116,15 @@ Furthermore both models always award the same probability to any equivalent clas
 
 Unfortunately computing the $n!$ length sum $\sum_{\sigma} p(G' \stackrel{\sigma}{\cong} G | \theta) p(\sigma)$ is infeasible for all but tiny graphs. As an alternative, we hoped to use a graph similarity kernel $k$ which compares two graphs $G, H$, giving some measure $k(G, H)$ of how similar they are up to ismorphism (in a node permutation invariant way).
 % Apparently one more computable example is the random walk kernel.
-Therefore the idea would be to replace the incorrect $p(G | \cG_\GIRG) = \int_\theta p(G | \theta) p(\theta) d\theta$ with 
+Therefore the idea would be to replace the
+\begin{align}
+  \text{replace the incorrect} \quad p(G | \cG_\GIRG) = \int_\theta p(G | \theta) p(\theta) d\theta
+  \\
+  \text{with} \quad
 % $\mu(G) = \int_\theta k(G, G' \sim \cG_\theta) p(\theta) d\theta$. This is an idea.
-$E_{G' \sim \cG_{\GIRG}} \left [ k(G, G') \right ]\approxeq \frac{1}{m} \sum_{i=1}^m k(G, G'_i \sim \cG_\GIRG)$, computable by Monte Carlo sampling.
-
+E_{G' \sim \cG_{\GIRG}} \left [ k(G, G') \right ]\approxeq \frac{1}{m} \sum_{i=1}^m k(G, G'_i \sim \cG_\GIRG)
+\end{align}
+which is Monte Carlo computable.
 % Therefore the idea would be to replace the incorrect $p(G | \cG_{\text{d-}\GIRG}) = \int_\theta p(G | \theta, \cG_{\text{d-}\GIRG}) p(\theta | \cG_{\text{d-}\GIRG}) d\theta$ with $\mu(G) = E_{G' \sim \cG_{\text{d-}\GIRG}} \left [ k(G, G') \right ]$. This is an idea.
 
 % So when we say $p(G | \theta)$, we actually mean the probability of getting a graph $G'$ which is isomorphic to $G$, given parameters $\theta$.
@@ -183,16 +188,30 @@ Viewing the graph kernel as an inner product of graph feature maps, these hopefu
 There are a range of graph kernels to choose from, however given the relatively large size of our graphs, runtime can be an issue. We ended up testing two kernels; alas both proved unsatisfactory. Without further expertise on graph kernels, we were forced to abandon this line of attack. We think that graph kernels might be more effective on smaller graphs with more unique structure (our random graph models and the real graphs themselves have a lot of homogenous structure) and particularly graphs with meangingful node labels.
 
 \subsubsection{Random walk kernel}
-The \textit{random walk kernel} between two graphs is just a count of the number of common walks in the pair,  of any length $l$. This is generally an infinite sum, so geometric weighting with the factor $\lambda^l$ is used to decay the contribution of longer walks, where $0 < \lambda < 1$ (we tested with $\lambda=10^{-5}$).
+The \textit{random walk kernel} between two graphs is just a count of the number of common walks in the pair,  of any length $l$. Thißs is generally an infinite sum, so geometric weighting with the factor $\lambda^l$ is used to decay the contribution of longer walks, where $0 < \lambda < 1$ (we tested with $\lambda=10^{-5}$).
 
-The product graph of $G$ and  $G'$ is defined as $G_\times = (V_\times, E_\times)$ where $V_\times = \{(v, v') | v \in V, v' \in V'\}$ and $E_\times = \{((v_1, v'_1), (v_2, v'_2)) | v_1 \sim v_2 \in E_1, v'_1 \sim v'_2 \in E_2\}$. This definition can be extended to node-labelled graphs, where we only take product vertices $(v, v') \in V_\times$ if $v \in V, v' \in V'$ have the same label. Common walks in the pair of graphs $G,G'$ are just walks in the product graph.
+The product graph of $G$ and  $G'$ is defined as 
+\begin{align}
+  G_\times = (V_\times, E_\times) \quad \text{where} \quad V_\times = \{(v, v') | v \in V, v' \in V'\}\\
+  \text{and} \quad E_\times = \{((v_1, v'_1), (v_2, v'_2)) | v_1 \sim v_2 \in E_1, v'_1 \sim v'_2 \in E_2\}
+\end{align}
+This definition can be extended to node-labelled graphs, where we only take product vertices $(v, v') \in V_\times$ if $v \in V, v' \in V'$ have the same label. Common walks in the pair of graphs $G,G'$ are just walks in the product graph.
 
 The naive implementation of the random walk kernel has complexity $O(n^6)$, however this can be sped up to $O(n^3)$. This is still too slow for our purposes. We only made limited tests with small graphs of $n \leq 3000$ nodes - see e.g. \cref{fig:rw_kernel_fitcopycube}.
 
 \subsubsection{Weisfeiler-Lehman kernel}
-The \textit{Weisfeiler-Lehman kernel} runs much faster in $O(h|E|)$ time, where $|E|$ is the number of edges in the graph and $h$ is a chosen parameter, the number of rounds of relabelling within the algorithm. The algorithm requires some starting node labels $(l(v))_{v \in V}$ - we colour nodes into a small discreet set of colours by grouping together nodes with similar sized degrees. It also uses a base kernel $k_{\text{base}}$ which is computed at each relabelling round  - we used the simplest/speediest node label histogram dot product kernel: $k(G, G') = \langle \vec{f}, \vec{f}' \rangle$ where $\vec{f} = (f_1, \dots, f_k)$, $f_i = |\{ v \in V \;:\; l(v) = i\}|$ is the number of nodes with label $i$.
-
-The Weisfeiler-Lehman kernel is then defined as $k_{WLK}(G, G') = k_{\text{base}}(G_1, G_1') + \dots + k_{\text{base}}(G_h, G_h')$. $G=G_1,\; G' = G'_1$, and $G_{i+1}$ is computed iteratively as relabelling each node in $G_i$ with $l(v) \gets (l(v), (l(u))_{u \sim v})$. This looks odd, but in practice each label is just rehashed as a new integer rather than becoming a highly nested tuple.
+The \textit{Weisfeiler-Lehman kernel} runs much faster in $O(h|E|)$ time, where $|E|$ is the number of edges in the graph and $h$ is a chosen parameter, the number of rounds of relabelling within the algorithm. The algorithm requires some starting node labels $(l(v))_{v \in V}$ - we colour nodes into a small discreet set of colours by grouping together nodes with similar sized degrees. It also uses a base kernel $k_{\text{base}}$ which is computed at each relabelling round  - we used the simplest/speediest node label \textit{histogram dot product kernel}:
+\begin{equation}
+  k(G, G') = \langle \vec{f}, \vec{f}' \rangle \quad \text{where} \quad \vec{f} = (f_1, \dots, f_k), \;f_i = |\{ v \in V \;:\; l(v) = i\}|
+\end{equation}
+The Weisfeiler-Lehman kernel is then defined as
+\begin{align}
+  k_{WLK}(G, G') = k_{\text{base}}(G_1, G_1') + \dots + k_{\text{base}}(G_h, G_h')
+\\
+G =G_1,\; G' = G'_1 ; \quad G_{i+1}\; \text{by relabelling} \; G_i: \quad l(v) \gets (l(v), (l(u))_{u \sim v})
+\end{align}
+% $G=G_1,\; G' = G'_1$, and $G_{i+1}$ is computed iteratively as relabelling each node in $G_i$ with $l(v) \gets (l(v), (l(u))_{u \sim v})$.
+This looks odd, but in practice each label is just rehashed as a new integer rather than becoming a highly nested tuple.
 
 
 

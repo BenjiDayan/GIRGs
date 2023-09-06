@@ -97,11 +97,17 @@ Using the \textit{max norm} as the distance function, i.e., $\norm{\vec{x}} = \n
 %     ||\vec{x} - \vec{y}||_\infty &= \max_i |x_i - y_i|_C\\
 %     |x_i - y_i|_C :&= \min(|x_i - y_i|, 1 - |x_i - y_i|)
 % \end{align}
-\begin{equation}
-    ||\vec{x} - \vec{y}||_\infty = \max_{i \in [d]} \; \min(|x_i - y_i|, 1 - |x_i - y_i|)
-    \quad \text{(in a torus $\T^d$)}
-    % |x_i - y_i|_C :&= \min(|x_i - y_i|, 1 - |x_i - y_i|)
-\end{equation}
+% \begin{equation}
+%     ||\vec{x} - \vec{y}||_\infty = \max_{i \in [d]} \; \min(|x_i - y_i|, 1 - |x_i - y_i|)
+%     \quad \text{(in a torus $\T^d$)}
+%     % |x_i - y_i|_C :&= \min(|x_i - y_i|, 1 - |x_i - y_i|)
+% \end{equation}
+\begin{align}
+    ||\vec{x} - \vec{y}||_\infty &= \max_{i \in [d]} |x_i - y_i|_\T
+    \quad\quad \text{(in a torus $\T^d$)}
+    \\
+    |a - b|_\T &= \min(|a - b|, 1 - |a - b|)
+\end{align}
 The \textit{minimum component distance (MCD)}, defined as $\norm{x}_{\mathrm{mcd}} = \min_i |x_i|$, does not even satisfy the triangle inequality, yet it preserves most properties of GIRGs. This distance function is reasonable if we desire two nodes to have a higher edge probability if they are close in at least one dimension, rather than in every dimension.
 
 $\alpha \in (1, \infty]$ is a parameter that impacts the affect of geometry on edge probabilites. We differentiate between \textit{short edges} where $r_{uv} < (w_u w_v / W)^{1/d}$ and $p_{uv} = \Theta(1)$ (for these, the $\min(1, \cdot)$ is applied), and \textit{long edges}, where $r_{uv} > (w_u w_v / W)^{1/d}$, and $p_{uv}$ diminishes to zero as the distance increases. Larger values of $\alpha$ accelerate this decay in long edge probability, thus more severely limiting the number of long-distance edges. $\alpha=\infty$ imposes a strict cutoff, setting $p_{uv} = 0$ for long edges.
@@ -480,7 +486,7 @@ For a node pair $(u,v)$, let $r_1, r_2, r_3$ be the distances in the $3$ 1d GIRG
 This means we could directly take the union over all edges in $G_1, G_2, G_3$ to produce our 3d MCD GIRG $G$.
 In the $\alpha < \infty$ case, to decide if the edge $(u,v)$ is present in the final graph $G$, we rather must additionally check whether the 1d GIRG with the smallest $r_i$ has an edge. E.g. it could be that $p_1 = 0.5, p_2 = 0.3, p_3 = 0.01$, and that $u \sim v$ only in $G_2$ - in this case we would take $u \not \sim v$ in $G$ as the minimum component is $i=1$, thus we copy edge/non-edge for $(u, v)$ from $G_1$. 
 
-There's a subtle difference however in that the $3$ 1d GIRGs actually need edge probabilities with a similar formula to those in the resultant MCD GIRG. This means taking
+There's a subtle difference however in that the $3$ 1d GIRGs actually need to be generated from edge probabilities with a similar formula to those in the resultant MCD GIRG. This means taking
 \footnote{This is treacherous as with such an edge probability these \q{1d GIRGs} might technically no longer be actual GIRGs - however in this section we will still refer to them as such for ease of discussion. Note that having $\Theta(n)$ edges is a key GIRG property, which the \q{1d GIRGs} in the MCD algorithm still possess; this doesn't hold when applying the algorithm in the max norm setting.}
 \begin{equation}
     p_i = \min \left \{
@@ -511,7 +517,7 @@ The number of overcounted (and hence needed to be discarded) edges from the 1d G
         \algorithmiccomment{{\scriptsize edge probs using d-dim MCD GIRG formula}}
     \State $V \gets [n];\; E \gets \{\}$
     \For{$i \in [d]$}
-        \For{$u \sim v \in E_i$}
+        \For{$(u,v) \in E_i$}
             % \State Assemble (r_1, r_2, ..., r_d)
             \If{$i = \argmin_i r_i$}
                 \State $E \gets E \cup \{(u, v)\}$
@@ -531,7 +537,7 @@ The number of overcounted (and hence needed to be discarded) edges from the 1d G
 \end{algorithm}
 
 
-\subsubsection{Extending the algorithm to max GIRGs and mixed min/max GIRGs}
+\subsubsection{Extending the algorithm to max GIRGs and mixed GIRGs}
 \paragraph{Extension to max GIRGs} We would like to extend \cref{alg:mcd_1d_combination_algo} to generate max norm GIRGs. Unfortunately, although the algorithm is still correct, its runtime blows up due to the fact that each 1d GIRG will now have many more than $\Theta(n)$ edges. In short, now $r_{uv} = \max_j r_j \geq r_i$, such that $p_i \geq p_{uv}\; \forall i=1,...,d$ and each 1d GIRG in expectation has more edges than the resultant max GIRG. This would be ok if there were only a constant factor more, but they actually each have $\Theta(n^{1 - 1/d})$ times more edges, which means the runtime of the algorithm is now $O(d \cdot n^{2 - 1/d})$.
 
 % TODO the Blasius algorithm is "O(n)". It's definitely at least $O(|E|)$, but is it worse?
@@ -568,9 +574,15 @@ Therefore we can efficiently sample high dimensional mixed min/max GIRGs as long
 
 \section{Distorted GIRGs}
 \label{subsec:distorted_girgs}
-A final GIRG variant that we only play with in \cref{chap:diff_maps} is the \textit{distorted GIRG}. This is a GIRG where the node locations' dimensions aren't all treated equally - rather they are ordered in importance $1 > 2 > ... > d$ via some weighting scheme $1=\lambda_1 \geq \lambda_2 \geq ... \lambda_d > 0$. For instance a max norm distorted torus GIRG would have $r(\vec{x}, \vec{y}) = \max_i \lambda_i |x_i - y_i|_C$. Oddly, to distort a MCD GIRG you instead have to use the inverse weights $\lambda_i^{-1}$, as now the smallest dimension distance has the greatest influence on the overall node distance.
+A final GIRG variant that we only play with in \cref{chap:diff_maps} is the \textit{distorted GIRG}. This is a GIRG where the node locations' dimensions aren't all treated equally - rather they are ordered in importance $1 > 2 > ... > d$ via some weighting scheme $1=\lambda_1 \geq \lambda_2 \geq ... \lambda_d > 0$. For instance a max norm distorted torus GIRG would have
+\begin{equation}
+    r(\vec{x}, \vec{y}) = \max\limits_{i \in [d]} \lambda_i |x_i - y_i|_\T
+\end{equation}
+Oddly, to distort a MCD GIRG you instead have to use the inverse weights $\lambda_i^{-1}$, as now the smallest dimension distance has the greatest influence on the overall node distance.
 
-The idea of distorted GIRGs is natural - that some dimension are more important than others in influencing edges. For social networks it could be e.g. that socioeconomic status of individuals has much higher impact on their friendships than personality type. The weighted representation is easy to work with but an alternative is to literally distort the space $\chi = \T^d$ or $\chi = [0,1]^d$ to be cuboidal, i.e. no longer cube shaped.
+The idea of distorted GIRGs is natural - that some dimension are more important than others in influencing edges. For social networks it could be e.g. that socioeconomic status of individuals has much higher impact on their friendships than personality type.
+
+The weighted representation is easy to work with but an alternative is to literally distort the space $\chi = \T^d$ or $\chi = [0,1]^d$ to be cuboidal, i.e. no longer cube shaped. In order to remain consistent with our previous prior of node locations uniformly distributed in the cube, the node distribution in the cuboid would no longer be uniform. The simplest method would be to sample nodes first in the cube, and then map/rescale the whole space and locations together into a cuboid.
 
 % Our 1d modified to be $d$-d edge probability like GIRGs have strictly more edges than their normal 1d counterparts, as they have $(2r_i)^d \leq 2r_i$ in their $p_{uv}$ denominator.
 
