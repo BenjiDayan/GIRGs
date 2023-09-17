@@ -6,7 +6,9 @@ The goal of this thesis was to explore the capacity of different GIRG model vari
 \end{enumerate}
 There was also a third effort, to use graph kernels as an alternative to Bl{\"a}sius's framework for evaluating a generative model's realism, which was unsuccessful, and documented in \cref{chap:graph_kernels}.
 
-1. showed GIRGs to perform similarly or better in realism than other simpler generative models, with different types of GIRGs excelling in simulating different  statistics of the real graphs. 2. showed more concretely that GIRGs are expressive enough to replicate the connectivity of these social networks. Both 1. and 2. showed that $d > 1$ dimensional GIRGs generally did not improve significantly on 1d GIRGs, but suggested that higher dimensions might work best in a mixed min/max GIRG or distorted GIRG framework where there's a natural downwards progression of influence of dimensions.
+1. showed GIRGs to perform similarly or better in realism than other simpler generative models, with different types of GIRGs excelling in simulating different  statistics of the real graphs. 2. showed more concretely that GIRGs are expressive enough to replicate the connectivity of these social networks. Both 1. and 2. showed that $d > 1$ dimensional GIRGs generally did not improve significantly on 1d GIRGs, with some exceptions, but suggested that higher dimensions might work best in a mixed min/max GIRG or distorted GIRG framework where there's a natural downwards progression of influence of dimensions.
+
+Throughout the thesis we showed many practical methods and ideas. We detailed efficient algorithms for sampling cube GIRGs, and MCD or mixed min/max GIRGs. We showed how to fit the higher level $c, \alpha$ GIRG parameters to a given graph by binary search to match the graph's edge count and clustering coefficient. Finally we explored fitting more granularly GIRG point locations with a fast first fit with diffusion maps, with various modifications and post-processing steps to optimise performance; we prototype a slower iterative second refinement to maximise likelihood, and offer ideas for its further improvement. 
 
 
 % In documenting our various experiments, we also detailed our methods and ideas for working with GIRGs and graph data which may prove useful to other practitioners.
@@ -25,7 +27,7 @@ Other real graph datasets than the Facebook social networks we used might be exp
 Adapting the GIRG uniform location priors and power law weight priors to something more flexible and realistic to real-world data could also be fruitful.
 
 
-\paragraph{Many thanks} to my supervisors Marc Kaufmann and Ulysse Schaller, as well as Johannes Lengler and Afonso Bandeira, for their valuable input and guidance throughout the thesis. Thank you to Angelika Steger and her lab for their friendly and welcoming research environment. Finally much appreciation to friends, family, ETH, etc. for their support and existence. And thank you to the reader for making it this far! I hope it has been an enjoyable / interesting read.
+\paragraph{Many thanks} to my supervisors Marc Kaufmann and Ulysse Schaller, as well as Prof. Johannes Lengler and Prof. Afonso Bandeira, for their valuable input and guidance throughout the thesis. Thank you to Prof. Angelika Steger and her lab for their friendly and welcoming research environment. Finally much appreciation to friends, family, ETH, etc. for their support and existence. And thank you to the reader for making it this far! I hope it has been an enjoyable / interesting read.
 
 
 

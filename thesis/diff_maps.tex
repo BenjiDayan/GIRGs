@@ -4,27 +4,30 @@
 \section{Introduction}
 % In previous sections' GGM comparison framework we assessed graphs sampled from the GIRG prior for the ability to resemble real social network graphs with respect to in high level statistics. This meant sampling $n$ points $\vec{x}_1, ..., \vec{x}_n$ uniformly from the geometric space $\chi$, and $n$ weights $w_1, ..., w_n$ from $\powerlaw(\tau)$.
 
-The GGM comparison framework detailed in \cref{chap:GGM} was designed to assess the similarity of two distributions of graphs, real-world and fake generated, based on higher level features. The fake GGM generates are only loosely fit on their real counterparts, such that the graphs have no node-node or edge-edge correspondences. In the non-copy-weight GIRG case, the $n$ nodes of the generated graph have their weights iid power law sampled $w_1, ..., w_n \sim \powerlaw(\tau)$, and their locations iid uniformly sampled $\vec{x}_1, ..., \vec{x}_n \sim U(\chi)$. Hence the features used for comparison to the real graphs, like mean (or median / standard deviation) node degree, node closeness centrality, or effective diameter etc. are necessarily node permutation invariant.
+The GGM comparison framework detailed in \cref{chap:GGM} was designed to assess the similarity of two distributions of graphs, real-world and fake generated, based on higher level features. The fake GGM generated graphs are only loosely fit on their real counterparts, such that the graphs have no node-node or edge-edge correspondences. In the non-copy-weight GIRG case, the $n$ nodes of the generated graph have their weights iid power law sampled $w_1, ..., w_n \sim \powerlaw(\tau)$, and their locations iid uniformly sampled $\vec{x}_1, ..., \vec{x}_n \sim U(\chi)$. Hence the features used for comparison to the real graphs, like mean (or median / standard deviation) node degree, node closeness centrality, or effective diameter etc. are necessarily node permutation invariant.
 
-An alternative framework is to try to fit a GGM model to a graph so as to compare on an edgewise and likelihood basis. There is little hope for Chung-Lu, Erdos-Renyi and Barabasi-Albert to achieve this. However the GIRG GGM has more parameters, so could fit not just $\hat{\alpha}$ to match the local clustering coefficient, $\hat{c}$ to match the number of edges, and $\hat{\tau}$ to match the degree distribution tail, but to further actually try and infer individual node weights $w_u \in \R^+$, and positions $\vec{x}_u \in \chi$. 
+An alternative framework is to try to fit a GGM model to a graph so as to compare on an edgewise and likelihood basis. There is little hope for Chung-Lu, Erd\H{o}s-Reny{\'i} and Barab{\'a}si-Albert to achieve this. However the GIRG GGM has more parameters, so could fit not just $\hat{\alpha}$ to match the local clustering coefficient, $\hat{c}$ to match the number of edges, and $\hat{\tau}$ to match the degree distribution tail, but to further actually try and infer individual node weights $w_u \in \R^+$, and positions $\vec{x}_u \in \chi$. 
 
 We saw this already to some extent with the copy-weight GIRGs - where $\hat{w}_u = d_u$ is fit from the observed real graph node degrees. The $\vec{x}_u$ are however much harder to fit; for starters any maximum likelihood fit $(\hat{\vec{x}}_u)_{u \in V}$ would be rotation, reflection, and translation invariant (isometries). Finding any one maximum likelihood fit is impractical for all but the smallest graphs.
 
-In this chapter we explore the method of \textit{diffusion maps} for computationally efficiently fitting an initial good guess of the $(\vec{x}_u)_{u \in V}$ positions. \cite{garcia2019mercator} similarly used diffusion maps to fit a first estimate of node locations for HRGs - this seems to be key to part of their claim of their algorithm being the best HRG embedder with still reasonable $O(n^2)$ runtime. We elucidate more on the applicability/use of diffusion maps, provide some post processing techniques to improve the quality of node estimates, and propose the eigenvalues of the diffusion map as a method for determining an appropriate dimensionality $d$ for the GIRG model.
+In this chapter we explore the method of \textit{diffusion maps} for computationally efficiently fitting a good initial guess of $(\vec{x}_u)_{u \in V}$ positions. \cite{garcia2019mercator} similarly used diffusion maps to fit a first estimate of node locations for HRGs - this seems to be key to part of their claim of their algorithm being the best HRG embedder with still reasonable $O(n^2)$ runtime. In \label{sec:diff_maps_theory_major} we introduce the theory around diffusion maps and discuss how best to apply them to our problem. In \cref{sec:diffusion_maps_empirical_results} we demonstrate the method's inferred locations on some Facebook graphs and GIRG generated graphs, and detail some post processing techniques to improve the quality of node estimates. Here we also demonstrate that the eigenvalues of the diffusion map could be an empirical method for determining an appropriate dimensionality $d$ for the GIRG model.
 %  and assess the expressivity of the GIRG model to precisely replicate a given real social network graph.
 
 \section{Diffusion Maps Theory}
 \label{sec:diff_maps_theory_major}
-Diffusion Maps \cite{coifman2006diffusion} are a technique originally intended to find a lower dimensional representation of some vector points taken from a higher dimensional space. For this to work, the points must actually conform to a lower dimensional manifold $\cM$, e.g. points on a 3d sphere $x_1^2 + x_2^2 + x_3^2 = 1$, but embedded in $\R^5$. Or a \q{swiss roll}: an inwardly spiralling 2d manifold in 3d space. The method involves first converting points to a (weighted) adjacency graph $W$ via a distance kernel, and then decomposing a diffusion process on this graph to produce a lower dimensional vector representation of the original points.
+Diffusion Maps \cite{coifman2006diffusion} are a technique originally intended to find a lower dimensional representation of some vector points taken from a higher dimensional space. This particularly makes sense if the points actually roughly conform to a lower dimensional manifold $\cM$, e.g. points on a 3d sphere $x_1^2 + x_2^2 + x_3^2 = 1$, but embedded in $\R^5$. Or e.g. a \q{swiss roll}: an inwardly spiralling 2d manifold in 3d space. The method involves first converting points to a \textit{(weighted) adjacency graph} $W$ via a \textit{similarity kernel} $W_{xy} = k(x,y)$, usually derived from some distance function $d(x,y)$. A lower dimensional vector representation of the original points is produced by then decomposing a diffusion process on this graph $W$, as we will explain in \cref{sec:diff_maps_theory}.
 
-This method is hence suitable for our purposes of $\vec{x}_u$ inference, as though we don't have a set of high dimensional points, we do have a simple graph $G = (V,E)$ that, like the distance kernel produced graph of diffusion maps, is assumed to have been produced by a geometry influenced process (e.g. generated from a GIRG).
+This method is hence suitable for our purposes of $\vec{x}_u$ inference, as though we lack a set of high dimensional points, we do have a simple graph $G = (V,E)$ that, like the distance kernel produced graph of diffusion maps, is assumed to have been produced by a geometry influenced process (e.g. generated from a GIRG).
+With GIRGs, our \q{manifold} is the original geometric space $\chi$, e.g. a torus or a cube.
+Each node $u \in V$ has a true location $\vec{x}_u \in \chi$.
+When seeking to infer these locations given just an input graph $G$, our problems are twofold. Firstly we lack internode distance information - instead of knowing some $d(u, v)$ in some higher dimensional space we just observe the presence of edges/non-edges, $u \sim v$ or $u \nsim v$, which give a signal as to whether $\norm{\vec{x}_u - \vec{x}_v}$ is large (if $u \nsim v$) or small (if $u \sim v$). Secondly we may not know the true dimensionality $d$ of the GIRG that generated $G$.
 
 \paragraph{Relation to node location likelihood maximisation}
 \cite{belkin2001laplacian} presents the method of Laplacian eigenmaps which is an interpretation of diffusion maps, showing that it optimises for the objective
 \begin{equation}
   \min_{X} \sum_{u, v} W_{uv} \norm{\vec{x}_u - \vec{x}_v}^2 \quad \text{subject to}\; X^T D X = I;\; X^T D\vec{1} = \vec{0} 
 \end{equation}
-where $X \in \R^{n \times d}$ is a  matrix whose rows $\vec{x}_u \in \R^d$ are the lower dimensional node representations, and $D$ is the diagonal degrees matrix of $W$. I.e. if nodes $u, v$ are connected directly by $W_{uv} = 1$, we want that their geometric locations $\vec{x}_u, \vec{x}_v$ are close by.
+where $X \in \R^{n \times d}$ is a  matrix whose $n$ rows $\vec{x}_u \in \R^d$ are the lower dimensional node representations, and $D$ is the diagonal degrees matrix of $W$. I.e. if nodes $u, v$ are connected directly by $W_{uv} = 1$, we want that their geometric locations $\vec{x}_u, \vec{x}_v$ are close by. The constraint $X^T D \vec{1} = \vec{0}$ however ensures that we cannot simply map all nodes to the same location.
 For fitting GIRG locations we would actually like to solve the objective of likelihood maximisation
 \begin{align}
   &\max\limits_{(\vec{x}_u \in \T^d)_{u \in V}} \;
@@ -52,7 +55,7 @@ Although the two objectives are different, we hope that the efficiently solvable
 \label{sec:diff_maps_theory}
 The random walk formulation of diffusion maps helps to give us intuition for how to effectively use the method with GIRG generated graphs.
 
-The idea is to analyse the diffusion process of randomly walking on the edges of the graph, characterising the probability cloud starting from one node in the graph as a sum of decreasingly important orthogonal contributions - coming from the eigenvectors of decreasing eigenvalues of a diagonalisable matrix.
+The idea is to analyse the diffusion process of randomly walking on the edges of the graph $W$, producing a sequence of nodes $u_0, u_1, u_2, ...$. We can characterise the probability cloud from starting the walk at at one node in the graph $u_0 = u$ as a sum of decreasingly important orthogonal contributions - coming from the eigenvectors of decreasing eigenvalues of a diagonalisable matrix.
 The top $d$ contributions can then be used as a coordinate system to describe each point in the graph. By taking a large timestep diffusion cloud, the general relative location of the initial point is the main signal. The hope is that if connections (probabilistically) follow a geometry of $d$-dimensions, then the diffusion map coordinate system will capture / align with this real geometry.
 
 The relevant quantities of the markovian random walk $u_t : t \in \N$ are defined
@@ -60,7 +63,7 @@ The relevant quantities of the markovian random walk $u_t : t \in \N$ are define
 %   M_{uv} := P(u_{t+1} = j | u_t=i) = \frac{w_{uv}}{\deg(u)}
 % \end{equation}
 \begin{align*}
-  & W_{uv} = \begin{cases}1 & u \sim v \\0 & u \nsim v \end{cases} \quad & \text{node adjacency matrix}
+  & W_{uv} = k(u, v) \;\; \text{e.g.} \begin{cases}1 & d(u,v) \leq \epsilon \\0 & d(u,v) > \epsilon \end{cases} & \text{weighted adjacency matrix}
   \\
   & M_{uv} := P(u_{t+1} = v | u_t=u) = \frac{W_{uv}}{\deg(u)}
   \quad & \text{$u \to v$ transition probability}
@@ -118,9 +121,12 @@ We ideally want the diffusion map embedding of a GIRG generated graph to have si
 % Ideas I'm trying to apply (crying): Berry and Harlim, and also Coiffman: continuous diffusion process on the manifold has "diffusion distance = embedding distance = geodesic distance" in the limit of small time $t$. Here embedding is some crummy eigenfunction business. Now Singer and so on say that the discrete diffusion map is a good approximation of the continuous thingy (or of the laplacian function or smth), when epsilon is small and we have points everywhere. We have good coverage: high $n$ and uniform points. We just need that the discrete diffusion process is similar to the 
 
 
-Long story short, in the conventional diffusion map setting of manifold $\cM$ in high dim space $\to$ lower dim embedding, the diffusion map is achieving a discrete approximation of the Laplace-Beltrami operator on the whole continuous manifold - see \cite{singer2006graph}. This operator defines a continuous diffusion distance $D_t(x, y) = \norm{\vec{\varphi}_t(\vec{x}) - \vec{\varphi}_t(\vec{y})}$ between points $x, y \in \cM$, which is approximately equal to the geodesic distance $d_g(x, y)$ on the manifold (up to a scale factor), when $d_g(x, y)^2 \ll t \ll 1$, as shown in the background section of \cite{berry2018iterated}. Hence if we can achieve a good discrete approximation to the continuous diffusion process, we can hope to get embeddings nearly isometric to the true geometric locations.
+% Long story short, i
+In the conventional diffusion map setting of manifold $\cM$ in high dim space $\to$ lower dim embedding, the diffusion map is achieving a discrete approximation of the Laplace-Beltrami operator on the whole continuous manifold - see \cite{singer2006graph}. This operator defines a continuous diffusion distance $D_t(x, y) = \norm{\vec{\varphi}_t(\vec{x}) - \vec{\varphi}_t(\vec{y})}$ between points $x, y \in \cM$ (continuous in space and also time $t \in \R^+$). This diffusion distance is approximately equal to the geodesic distance $d_g(x, y)$ on the manifold (up to a scale factor), when $d_g(x, y)^2 \ll t \ll 1$, as shown in the background section of \cite{berry2018iterated}. Hence if we can achieve a good discrete approximation to the continuous diffusion process, we can hope to get embeddings nearly isometric to the true geometric locations.
 
-With GIRGs, our \q{manifold} is the original geometric space $\chi$, e.g. a torus or a cube. Each node $u \in V$ has a true location $\vec{x}_u \in \chi$, and instead of having distances $d(u, v)^2$ in some higher dimensional space we just observe the presence of edges/non-edges, $u \sim v$ or $u \nsim v$, which give a signal as to whether $\norm{\vec{x}_u - \vec{x}_v}$ is large (if $u \nsim v$) or small (if $u \sim v$).
+% With GIRGs, our \q{manifold} is the original geometric space $\chi$, e.g. a torus or a cube.
+% Each node $u \in V$ has a true location $\vec{x}_u \in \chi$.
+% When seeking to infer these locations given just an input graph $G$, our problems are twofold. Firstly we lack internode distance information - instead of knowing some $d(u, v)^2$ in some higher dimensional space we just observe the presence of edges/non-edges, $u \sim v$ or $u \nsim v$, which give a signal as to whether $\norm{\vec{x}_u - \vec{x}_v}$ is large (if $u \nsim v$) or small (if $u \sim v$). Secondly we may not know the true dimensionality $d$ of the GIRG that generated $G$.
 
 We highlight three different approaches in implementing a diffusion map embedding of an input simple unweighted graph (suspected to be a GIRG) $G=(V, E)$.
 $G$ has adjacency matrix $A_{ij} = \begin{cases} 1 & \text{if } u \sim v \\ 0 & \text{if } u \nsim v \end{cases}$, and the differences between the approaches can be encapsulated in the choice of the weighted adjacency matrix $W_{ij}$ seen in \cref{sec:diff_maps_theory} used to define the diffusion process.
@@ -343,7 +349,27 @@ In the naive approach, similarly to how $\int_1^\infty x^{\beta} dx$ is bounded 
 
 % AAAAAAAAAA
 
-In \cref{fig:diffmap_algo_comparisons} diffusion clouds out of a point are shown for the three different edge weighting approaches. Both non naive versions look more like brownian motion clouds as desired. We additionally benchmarked the approaches by comparing the diffusion map embedding of a fake graph generated from a GIRG with known $\chi$-space embeddings. The homogeneous random walk approach has the best correlation between embeddings and true locations, although with $\gamma=0.9$ not $\gamma=1.0$.
+In \cref{fig:diffmap_algo_comparisons} diffusion clouds out of a point are shown for the three different edge weighting approaches. Both non naive versions look more like brownian motion clouds as desired. We additionally benchmarked the approaches by comparing the diffusion map embedding of GIRG generated graph with its known $\chi$-space point locations, shown in \cref{fig:diffmap_corr_comparisons}. The homogeneous random walk approach does well, though perhaps with a $\gamma < 1.0$ like around $0.8$, and the expected distance approach perhaps performs best overall.
+
+\begin{figure}
+  \centering
+  \begin{subfigure}{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/diffmap_corr1.png}
+    \caption{1st coordinate}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/diffmap_corr2.png}
+    \caption{2nd coordinate}
+  \end{subfigure}
+
+  \caption{Generated 15 separate $n=1500, d=2, \tau=2.5, \alpha=1.5$ distorted max cube GIRGs with weightings $(1.0, 0.7)$. Correlation coefficient between diffusion map embeddings and true locations shown, separately for 1st and 2nd coordinate. Method $-1$ denotes expected distance kernel with $T=1.0$, and other method in $0.0 \to 1.1$ denotes value of $\gamma$ used}
+  \label{fig:diffmap_corr_comparisons}
+  % \caption{Diffusion map eigenvalues (including $\lambda_1 = 1$) for a $n=2000, \tau=2.5, \alpha=1.3$ Cube GIRG with $d=1,2,3,4$ dimensions.}
+  % \label{fig:cube_diffmaps_d1to4_evals}
+\end{figure}
 
 %%%%%%%%%
 
@@ -510,6 +536,7 @@ The way we benchmark all these approaches is by generating a graph $G$ with a GI
 % So writing $\Phi = [\phi_1, \phi_2, ..., \phi_n]$ and $\Psi = [\psi_1, \psi_2, ..., \psi_n]$, we have that the $t$th step diffusion cloud is $i \mapsto \sum_{k=1}^n \phi_k(i) \lambda_k^t \vec{\psi}_k$. I.e. the diffusion map coordinate system is $\text{diffmap}_t(i) = (\lambda_2^t \phi_2(i), \lambda_3^t \phi_3(i), ..., \lambda_{d+1}^t \phi_{d+1}(i))$. The first coordinate is always $1$, it's the stationary distribution that all diffusion clouds converge to, so is discarded.
 
 \section{Empirical Results and Post-Processing}
+\label{sec:diffusion_maps_empirical_results}
 We see in \cref{fig:cube_diffmap_plots_d1and2} some 2d truncated diffusion maps. When the underlying graph was a 2d cube GIRG, the inferred points indeed look square like. From the 1d GIRG we get a curved line shape - i.e. a 1d manifold embedded in 2d, as expected. In testing diffusion maps on max norm torus / cube geometries, replication of node locations was very good. We additionally tested distorted GIRG variants to see if atenuating the signal of some dimensions would monotonically degenerate their diffusion map embedding - this was observed to be the case. We did not test diffusion maps on MCD GIRGs, though this would be interesting. We think in theory that, although the brownian motion would look unusual, no longer euclidean geometry like, the diffusion map embedding should still be able to recover the original geometry. This would be good to test in future work. 
 
 We detail some post processing steps that can be done to improve diffusion map embedding for both GIRG generated graphs, and real graphs (real graphs in particular produce wilder diffusion maps due to their idiosyncratic connectivity patterns).
@@ -594,7 +621,7 @@ The embeddings will be centered around the origin, as all $\lambda_2, \lambda_3,
 
 In order to map embeddings into the $[0, 1]^d$ torus/cube, the 0 centering can easily be fixed by shifting the points $(\vec{x}_u)_i \gets (\vec{x}_u)_i + \min_v (\vec{x}_v)_i$.
 If we are certain that the points should be distributed within the unit cube, then we can simply rescale separately along each dimension: $x \gets \frac{x - x_{\min}}{x_{\max} - x_{\min}}$.
-If furthermore we're certain that the distribution within the unit cube should be relatively uniform, we can perform a coordinatewise $\uniformify$ procedure that replaces $(\vec{x}_u)_i$ with its percentile value compared with other $(\vec{x}_v)_i$. \cref{fig:diffmap_uniformed_vs_nonuniformed} shows the $\uniformify$ procedure in action.
+If furthermore we're certain that the distribution within the unit cube should be relatively uniform, we can perform a coordinatewise $\uniformify$ procedure that replaces $(\vec{x}_u)_i$ with its percentile value compared with other $(\vec{x}_v)_i$. \cref{fig:diffmap_uniformed_vs_nonuniformed} and \cref{fig:diffmap_uniformed_vs_nonuniformed2} show the $\uniformify$ procedure in action.
 Real graphs' diffusion maps are often quite non-uniformly located points, with some highly bunched up and others spread out, so $\uniformify$ can be quite useful in this case.
 
 % helps to counteract the phenomenon of terribly different diffusion map scaling, whereby the majority of the graph which is well connected ends up highly bunched up, and a small number of outlying poorly connected nodes cover most of the embedding space. 
@@ -628,7 +655,7 @@ Real graphs' diffusion maps are often quite non-uniformly located points, with s
 \end{figure}
 
 
-\paragraph{Rotated Points} One issue with diffusion maps as seen in \cref{fig:cube_diffmap_plots_d2} is rotations - the 2d GIRG's points are rotated into a diamond shape. As we only hope for an isometric mapping of the original point locations to the diffusion map embedding, we can't expect the diffusion map embedding to be in the same basis as the original point locations. If we want to fit it back into $[0, 1]^d$, we don't care about reflections, and we can translate and rescale, however rotating is more difficult.
+\paragraph{Rotated Points} One issue with diffusion maps as seen in \cref{fig:cube_diffmap_plots_d2} is rotations - the 2d GIRG's points are rotated into a diamond shape. As we only hope for an isometric mapping of the original point locations to the diffusion map embedding, we can't expect the diffusion map embedding to be in the same basis as the original point locations. If we want to fit it back into $[0, 1]^d$, we don't care about reflections, and we can translate and rescale, however rotating is more difficult. Luckily for most purposes, we only care about the inferred internode distances which are preserved under rotations.
 
 That \cref{fig:cube_diffmap_plots_d2} looks almost perfectly 45 degree rotated could potentially be explained as the diffusion map trying to maximise diffusion explainability - the long square diagonal has overall more diffusion along it so might be picked up as a major eigenvalue - maybe a small imbalance of more nodes in one corner can cause this. Even assuming no overall rotation bias, you're going to get a square rotated somewhere between $0$ and $45$ degrees.
 
@@ -639,8 +666,8 @@ We introduced distorted GIRGs in \cref{subsec:distorted_girgs} as a possible mod
 If $a > b$, even just by a little amount, then the first diffusion map coordinate $\varphi_1(u)$ is likely to be very similar to $(\vec{x}_u)_1$. Only if $a=b$ is there no preference between $(\vec{x}_u)_1$ and $(\vec{x}_u)_2$, making a rotation possible.
 Hence the points $(\varphi_1(u), \varphi_2(u))_{u \in V}$ are likely to end up as a rectangle, not a rotated square; the variation in first coordinate will be greater than in the second.
 
-\cref{fig:2d_distorted_major} shows the 2d diff map embedding of such a distorted 2d cube GIRG. Note that the major coordinate is much easier to fit well, whereas the minor one has higher error (NB the diff map embedding of $x_2$ is negatively scaling with the true value which is fine - we can never guarantee same signs).
-We also see that the $x_1$ diffusion map embedding does not have quite a linear relationship with the real locations - it looks more like a cosin wave like relationship - this actually makes sense as eigenfunctions of the laplacian operator on a cube look like sin waves.
+\cref{fig:2d_distorted_major} shows the 2d diff map embedding of such a distorted 2d cube GIRG with weighting $(1.0, 0.6)$. Note that the major coordinate is much easier to fit well, whereas the minor one has higher error (NB the diff map embedding of $x_2$ is negatively scaling with the true value which is fine - we can never guarantee same signs).
+We also see that the $x_1$ diffusion map embedding does not have quite a linear relationship with the real locations - it looks more like a cosine wave like relationship - this actually makes sense as eigenfunctions of the laplacian operator on a cube look like sine waves.
 
 
 In the light of potentially non equal coordinates, the relative $\lambda_2 > \lambda_3 > ...$ scaling can be seen as a feature not a bug, if the hypothesis space of generative graph models is to be expanded to cuboid (non-cube) GIRGs. In this case all coordinates of the diffusion map don't have to be all (non-homogeneously) rescaled to the range $[0, 1]$ and can rather be homogeneously rescaled to retain their relative size ratios.
@@ -680,8 +707,13 @@ This sheds new light on the horizontalness of the $\lambda_2, \lambda_3, \lambda
       \caption{2d cube GIRG diff map with $\uniformify$ rescaling}
       \label{fig:sub2}
     \end{subfigure}
-  
-    \vspace{1em}
+    \caption{
+      2d truncated diffusion maps plotted for a 2d cube GIRG. Each point is the embedding of a node in the graph.}
+    \label{fig:diffmap_uniformed_vs_nonuniformed}
+
+  \end{figure}
+
+  \begin{figure}
   
     \begin{subfigure}{0.45\textwidth}
       \centering
@@ -697,8 +729,9 @@ This sheds new light on the horizontalness of the $\lambda_2, \lambda_3, \lambda
       \label{fig:sub4}
     \end{subfigure}
     \caption{
-      2d truncated diffusion maps plotted - each point is the embedding of a node in the graph. (a) and (b) are on a 2d GIRG, (c) and (d) on a real-world social network graph. The affect of the $\uniformify$ point rescaling procedure is shown, in (b) and (d).}
-    \label{fig:diffmap_uniformed_vs_nonuniformed}
+      2d truncated diffusion maps plotted for an example Facebook graph: socfb-Amherst41. Each point is the embedding of a node in the graph.}
+      % 2d truncated diffusion maps plotted - each point is the embedding of a node in the graph. (a) and (b) are on a 2d GIRG, (c) and (d) on a real-world social network graph. The effect of the $\uniformify$ point rescaling procedure is shown, in (b) and (d).}
+    \label{fig:diffmap_uniformed_vs_nonuniformed2}
 \end{figure}
 
 
@@ -767,6 +800,10 @@ This defeats the simple rescaling method of $x \gets \frac{x - x_{\min}}{x_{\max
 
 Instead we only rescale the central nodes: those whose joint coordinate-wise percentiles lie in $[5\%, 95\%]^d$; they are linearly scaled to the $[0.05, 0.95]^d$ cube. Finally the outlying nodes are percentile rescaled (non-linearly) to the upper/lower cube margins.
 This method is shown in comparison for a few graphs in \cref{fig:uniformifed_vs_restricted_rescaling}
+
+
+\subsection{Diffusion Maps Performance}
+We will see in the next chapter that diffusion maps already give quite good edge replication of our Facebook graphs. However further iterative point location refinement is still useful, giving a $20-50\%$ performance boost. Details of quantifying performance are in \cref{chap:likelihood_point_estimation}, in particular \cref{fig:direct_ordered_pec_convergence_curves} shows the performance of diffusion maps at iteration $0$, which is then increased for each subsequent point refinement iteration. Diffusion maps for a few more Facebook graphs are also shown in \cref{fig:uniformifed_vs_restricted_rescaling}, juxtaposed with their post point refinement counterparts
 
 
 % \begin{figure}

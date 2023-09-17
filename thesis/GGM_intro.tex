@@ -1,37 +1,37 @@
-\chapter{Generative Graph Models (GGM) and Blasius Realism Framework}
+\chapter{Generative Graph Models (GGM) and Bl{\"a}sius Realism Framework}
 \label{chap:GGM}
 \minitoc
 
 
-\cite{blasius2018towards} presents a general framework that can be used to assess the ability of a \textit{generative graph model (GGM)} to simulate a set of real graphs of interest. They demonstrate their method on a few common GGMs: \textit{Erdos-Renyi (ER)}, \textit{Barabasi-Albert (BA)} preferential attachement graphs, \textit{Chung-Lu} and \textit{Hyperbolic} random graphs. The real graph dataset which they attempt to simulate is a set of 219 real-world networks taken from the \textit{Network Repository} (\url{https://networkrepository.com/}, \cite{rossi2015network}).
+\cite{blasius2018towards} presents a general framework that can be used to assess the ability of a \textit{generative graph model (GGM)} to simulate a set of real graphs of interest. They demonstrate their method on a few common GGMs: \textit{Erd\H{o}s-Reny{\'i} (ER)}, \textit{Barabas{\'i}-Albert (BA)} preferential attachement graphs, \textit{Chung-Lu} and \textit{Hyperbolic} random graphs. The real graph dataset which they attempt to simulate is a set of 219 real-world networks taken from the \textit{Network Repository} (\url{https://networkrepository.com/}, \cite{rossi2015network}).
 
-Their framework assesses realism of a GGM by using it to produce a dataset of fake graphs. A metric of distinguishability of fake and real datasets based on a select few graph statistics is produced: training a binary SVM classifier of graph \textrightarrow fake/real using the combined fake and real graph datasets as training data, the accuracy of this classifier signifies real/fake distinguishability.
+Their framework assesses the realism of a GGM by using it to produce a dataset of fake graphs. A metric of distinguishability of fake and real datasets based on a select few graph statistics is produced: training a binary SVM classifier of graph \textrightarrow fake/real using the combined fake and real graph datasets as training data, the accuracy of this classifier signifies real/fake distinguishability.
 
-\cite{blasius2018towards} used their framework on a wider range of real-world graphs, but in particular found poor realism of the tested models on the $\approx 100$ strong subset of Facebook social networks that we focus on. We will use the framework to specifically test different types of GIRGs' realism on this tough subset, with the hope that they will do better than the previous best models - Chung-Lu and Hyperbolic. We also think that restricting to this one subset of what should be similar types of real-world graphs will allow clearer differentiation between different GGMs.
+\cite{blasius2018towards} used their framework on a wider range of real-world graphs, but in particular found poor realism of the tested models on the $104$ strong subset of Facebook social networks that we focus on. We will use the framework to specifically test different types of GIRGs' realism on this tough subset, with the hope that they will do better than the previous best models - Chung-Lu and Hyperbolic. We also think that restricting to this one subset of what should be similar types of real-world graphs will allow clearer differentiation between different GGMs.
 
 % Hence realism is evaluated on the chosen few graph statistics (e.g. mean node degree in a graph, or graph diameter), and at a higher collection level, which helps to 
 
 % assesses realism of the generative models by fitting them to the real graphs so as to produce a collection of similar fake graphs, and then determing the similarity/distinguishability of the two collections of real graphs and fake graphs. This comparison itself is done on the basis of a select few graph statistics - like mean node degree or graph diameter, so realism is ability of the generative model to produce graphs with a sequence of statistics indisinguishable
 
-% Erdos-Renyi (ER), Barabasi-Albert (BA) preferential attachement graphs, Chung-Lu and Hyperbolic Random graphs.
+% Erd\H{o}s-Reny{\'i} (ER), Barabas{\'i}-Albert (BA) preferential attachement graphs, Chung-Lu and Hyperbolic Random graphs.
 % They are compared on the basis of their ability to simulate real graphs of interest, such as social networks, citation networks, and biological networks, which are known to have power law node degree distributions.
 
 
 \section{GGM and Framework Mathematical Outline}
-A graph $G = (V,E)$ is said to be randomly generated from a GGM $\cG$, written $G \sim \cG$. Most of our GGMs are simple and can be described by a small number of parameters. For example for the Erdos-Renyi GGM, $G \sim \cG_{ER}(n, p)$ means that there are $n$ nodes: $V=[n]$, and each potential edge $(u,v)$ exists iid with probability $p$, i.e. $p(u \sim v) = p$.
+A graph $G = (V,E)$ is said to be randomly generated from a GGM $\cG$, written $G \sim \cG$. Most of our GGMs are simple and can be described by a small number of parameters. For example for the Erd\H{o}s-Reny{\'i} GGM, $G \sim \cG_{ER}(n, p)$ means that there are $n$ nodes: $V=[n]$, and each potential edge $(u,v)$ exists iid with probability $p$, i.e. $p(u \sim v) = p$.
 
 \subsection{Fitting a GGM to a particular real graph instance}
 \label{sec:fitting_GGM}
 \q{Fitting} a GGM to a real graph $G$ means finding the most plausible $\hat{\theta}$ in the hypothetical world where $G$ was produced via $G \sim \cG(\hat{\theta})$. Hence for our ER GGM example, choosing $\hat{n} = |V|$ is a no-brainer, and $\hat{p} = |E| / \binom{n}{2}$ follows by fitting the expected number of edges.
 
-Fitting $\hat{\theta}$ can also be done by likelihood estimation. This is tractable for the Erdos-Renyi GGM, by solving $\argmin_p \sum_{u \neq v} e_{uv} \log(p) + (1 - e_{uv}) \log( 1 - p)$, where $e_{uv}$ is the edge indicator function, which gives the same $\hat{p}$ as above. For GIRGs however, this would be intractable: for example we cannot even easily integrate over all possible point locations in the geometric space:
+Fitting $\hat{\theta}$ can also be done by likelihood estimation. This is tractable for the Erd\H{o}s-Reny{\'i} GGM, by solving $\argmin_p \sum_{u \neq v} e_{uv} \log(p) + (1 - e_{uv}) \log( 1 - p)$, where $e_{uv}$ is the edge indicator function, which gives the same $\hat{p}$ as above. For GIRGs however, this would be intractable: for example we cannot even easily integrate over all possible point locations in the geometric space:
 
 \begin{equation}
     p(G | \alpha, \vec{w}, d) = \int_{\vec{x}_1 \in [0,1]^d} \cdots \int_{\vec{x}_n \in [0,1]^d} p(G | \alpha, (\vec{x}_i)_{i=1}^n) \prod_{i=1}^n p(\vec{x}_i)
 \end{equation}
 
 Instead we can use a heuristic method based on \textit{Approximate Bayesian Computation (ABC)}. We seek the parameter $\hat{\theta}$ that minimises the expected distance $ \E[\delta(G, G' \sim \cG(\theta))]$ for some distance metric $\delta$. This basically means that the GGM parametrised by $\hat{\theta}$ successfully generates graphs $G'$ that look similar to our given graph $G$.
-For $\delta$ to be effective, ideally it would be something like $(f(G) - f(G'))^2$, for $f$ a sufficient statistic of $\theta$. In practice this looks like an algorithm where we repeatedly sample $\theta$ from a prior; use it to generate $G'$; see if $f(G') \approxeq f(G)$, and if so keep $\theta$ as a candidate for $\hat{\theta}$.
+For $\delta$ to be effective, ideally it would be something like $(f(G) - f(G'))^2$, for $f$ a sufficient statistic of $\theta$. In practice this looks like an algorithm where we repeatedly sample $\theta$ from a prior; use it to generate $G'$; see if $f(G') \approxeq f(G)$, and if so keep $\theta$ as a candidate for $\hat{\theta}$, potentially updating the prior to be more concentrated around that good $\theta$.
 
 \subsection{Plausibility of Fitted GGMs}
 
@@ -39,29 +39,29 @@ Similarly to the use of a statistic $f$ of real and generated graphs as a proxy 
 
 Having fit $\hat{\theta}$ of the GGM, we can then sample graphs $G' \sim \cG(\hat{\theta})$ which are hypothetically similar to $G$. We can only hope for similarity on the global level. Even in the best case scenario where both $G, G' \sim \cG(\hat{\theta})$, there is no local identification of nodes and edges, e.g. we cannot expect  $e \in E \iff e \in E'$ - see \cref{chap:graph_kernels} for more on graph similarity.
 
-For example in the Erdos-Renyi exact fit case, in the best case scenario we have $G \sim \cG_{ER}(n, p^*)$ and $G' \sim \cG_{ER}(n, \hat{p} = p^* + \epsilon)$. Although there will be some small estimation error $\epsilon$ in the fit parameter (which may be biased to be non-zero if e.g. $G$ randomly has $|E|$ differing from $p^* {n \choose 2}$), we've explicitly fit for the high level statistic of the number of edges, s.t. $|E| = \E[|E'|] = \hat{p} \binom{n}{2}$, and $|E'| \approxeq |E|$ with some small variance. For other (not fit) high level statistics $\fclass$ like the effective diameter of the graph, their expected value will be close to that of $G$, $E_{G' \sim \cG(\hat{\theta})}[\fclass(G')] \approxeq \fclass(G)$, and likewise concentrated with small variance s.t. $\fclass(G') \approxeq \fclass(G)$.
+For example in the Erd\H{o}s-Reny{\'i} exact fit case, in the best case scenario we have $G \sim \cG_{ER}(n, p^*)$ and $G' \sim \cG_{ER}(n, \hat{p} = p^* + \epsilon)$. Although there will be some small estimation error $\epsilon$ in the fit parameter (which may be biased to be non-zero if e.g. $G$ randomly has $|E|$ differing from $p^* {n \choose 2}$), we've explicitly fit for the high level statistic of the number of edges, s.t. $|E| = \E[|E'|] = \hat{p} \binom{n}{2}$, and $|E'| \approxeq |E|$ with some small variance. For other (not fit) high level statistics $\fclass$ like the effective diameter of the graph, their expected value will be close to that of $G$, $E_{G' \sim \cG(\hat{\theta})}[\fclass(G')] \approxeq \fclass(G)$, and likewise concentrated with small variance s.t. $\fclass(G') \approxeq \fclass(G)$.
 
 
 Furthermore if we were to generate a whole list of graphs $G'_1, \dots, G'_m$ from $\cG(\hat{\theta})$, assuming the matching GGM hypothesis, we would not expect $G$ to stand out from the crowd. Essentially the random variable $\fclass(G'(G))$ should follow a distribution with $\fclass(G)$ not too far from the mean/median, in an empirical p-value sense.
 
 
-\subsection{Fitted GGMs as candidates for real graphs - Blasius}
+\subsection{Fitted GGMs as candidates for real graphs - Bl{\"a}sius}
 \label{sec:ggm_blasius_framework}
 \cite{blasius2018towards} takes this method one step further. They are essentially evaluating the hypothesis that the set of real graphs $G_1, ..., G_k$ are generated from a particular GGM $\cG$, but with differing parameters: $G_1 \sim \cG(\theta^*_1), ..., G_k \sim \cG(\theta^*_k)$. Perhaps $\theta^*_i$ come from some prior distribution $p(\theta)$.
 
-They again fit individual $\hat{\theta}_i$ with which to generate one $G'_i \sim \cG(\hat{\theta}_i)$ per real graph $G_i$. This way instead of, for each real graph, comparing multiple $G'_{ij}$ to $G_i$ and averaging, they can compare the set of graphs $\{G_i\}_{i=1}^k$ to $\{G'_i\}_{i=1}^k$. Graph comparison is done by comparing a wide number of statistics/metrics computed for each graph. These are input as a whole feature vector $\vec{f}^\mathrm{class}(G)$ to an SVM classifier, which is trained to classify membership of the real or generated dataset. These features are statistics such as the number of nodes, mean node degree, mean node closness centrality, graph diameter and so on.
+They again fit individual $\hat{\theta}_i$ with which to generate one $G'_i \sim \cG(\hat{\theta}_i)$ per real graph $G_i$. This way instead of, for each real graph, comparing multiple $G'_{ij}$ to $G_i$ and averaging, they can compare the set of graphs $\{G_i\}_{i=1}^k$ to $\{G'_i\}_{i=1}^k$. Graph comparison is done by comparing a number of statistics/metrics computed for each graph. These are input as a whole feature vector $\vec{f}^\mathrm{class}(G)$ to an SVM classifier, which is trained to classify membership of the real or generated dataset. These features are statistics such as the number of nodes, mean node degree, mean node closness centrality, graph diameter and so on.
 
 
 Performing this classification task over the whole dataset of graphs allows for a GGM realism evaluation without needing to have the additional computation of generating multiple $G'_{ij}$ for each real graph $G_i$, which would have given a more detailed graphwise GGM realism metric. There is an added benefit of helping to cover for GGM parameter fitting inaccuracy. If $\hat{\theta}_i = \theta^*_i + \epsilon_i$, it may still be possible to distinguish $G_i$ from $\{G'_{ij}\}_{i=1}^m$ due to the $\epsilon_i$ fitting error. If instead we compare the set $\{\theta^*_i\}_{i=1}^k$ to $\{\hat{\theta}_i\}_{i=1}^k$, Now each $\hat{\theta}_i \neq \theta^*_i$, but still well fits into the distribution of $\{\theta^*_i\}_{i=1}^k \sim p(\theta)$. Finally having one $G'_i$ per real graph $G_i$ also simplifies the binary classification task by having a balanced dataset.
 
-% We suggested in the previous section that multiple $G'_{ij}$ could be generated per real graph $G_i$ - this would reduce the variance of the whole process. This is also necessary to be able to train a classifier on an individual real graph basis, as you cannot do binary classification on just a pair of feature vectors $\vec{f}^\mathrm{class}(G_i)$ and $\vec{f}^\mathrm{class}(G'_i)$. Blasius instead aggregates the classification over the whole dataset of real graphs, allowing sufficient datapoints to train a classifier while reducing the overall necessary computation ($k$ generated graphs produced instead of $km$).
+% We suggested in the previous section that multiple $G'_{ij}$ could be generated per real graph $G_i$ - this would reduce the variance of the whole process. This is also necessary to be able to train a classifier on an individual real graph basis, as you cannot do binary classification on just a pair of feature vectors $\vec{f}^\mathrm{class}(G_i)$ and $\vec{f}^\mathrm{class}(G'_i)$. Bl{\"a}sius instead aggregates the classification over the whole dataset of real graphs, allowing sufficient datapoints to train a classifier while reducing the overall necessary computation ($k$ generated graphs produced instead of $km$).
 
 
 % This gives us a mirrored real/fake graph features dataset: $\{\vec{\fclass}_i (G)  = \vec{\fclass}(G_i)$ for feature vector function $\vec{\fclass}$, against $\vec{\fclass}_i$.
-The output of the Blasius framework, for a given GGM and classification feature vector $\fclass$, is a real/fake accuracy percentage. If it were really the case that the input real-graphs were generated from $G_i \sim \cG(\theta^*_i)$ of the same GGM $\cG$ as the fitted fake graphs, the SVM should be able to acheive only close to $50\%$ accuracy, as real and fake $\fclass$ should be hard to tell apart. Higher accuracies denote distinguishability of real from fake - occuring if instead $G_i \sim \widetilde{\cG}(\phi^*_i)$ for some alternative GGM $\widetilde{\cG}$.
+The output of the Bl{\"a}sius framework, for a given GGM and classification feature vector $\fclass$, is a real/fake accuracy percentage. If it were really the case that the input real-graphs were generated from $G_i \sim \cG(\theta^*_i)$ of the same GGM $\cG$ as the fitted fake graphs, the SVM should be able to acheive only close to $50\%$ accuracy, as real and fake $\fclass$ should be hard to tell apart. Higher accuracies denote distinguishability of real from fake - occuring if instead $G_i \sim \widetilde{\cG}(\phi^*_i)$ for some alternative GGM $\widetilde{\cG}$.
 
 
-% Contextually, GIRGs are compared with other generative graph models: Erdos-Renyi (ER), Barabasi-Albert (BA) preferential attachement graphs, Chung-Lu and hyperbolic graphs.
+% Contextually, GIRGs are compared with other generative graph models: Erd\H{o}s-Reny{\'i} (ER), Barabas{\'i}-Albert (BA) preferential attachement graphs, Chung-Lu and hyperbolic graphs.
 % In \cite{blasius2022efficiently}
 
 
@@ -79,7 +79,7 @@ The output of the Blasius framework, for a given GGM and classification feature 
 
 
 \section{Fitting GIRG GGM to a real graph}
-The GGM parameters of the GIRG model $\cG_{\GIRG}(\theta)$ are $\theta = (n, d, c, \alpha, \tau)$. For the Blasius framework we need to fit $\hat{\theta}$ to a given real graph $G$, as the best estimate for the parameters that would have generated $G \sim \cG_{\GIRG}(\theta)$. The problem of fitting dimension $d$ is a tricky one that we touch on briefly in \cref{chap:diff_maps}. We also attempted to use \textit{graph fractal dimension} to infer $d$ without success. We instead avoid the problem by treating 1d, 2d, 3d etc. GIRGs as separate GGMs, to be individually fitted and inter-compared.
+The GGM parameters of the GIRG model $\cG_{\GIRG}(\theta)$ are $\theta = (n, d, c, \alpha, \tau)$. For the Bl{\"a}sius framework we need to fit $\hat{\theta}$ to a given real graph $G$, as the best estimate for the parameters that would have generated $G \sim \cG_{\GIRG}(\theta)$. The problem of fitting dimension $d$ is a tricky one that we touch on briefly in \cref{chap:diff_maps}. We also attempted to use \textit{graph fractal dimension} to infer $d$ without success. We instead avoid the problem by treating 1d, 2d, 3d etc. GIRGs as separate GGMs, to be individually fitted and inter-compared.
 
 \subsection{Fitting number of nodes $n$}
 
@@ -89,7 +89,7 @@ before fitting $\cG$ to it. Then $n$ is just the number of remaining nodes.
 
 % This is not because the GIRG model always generates connected graphs, which is not true. 
 
-Blasius' rational is that where some real graphs in our dataset have disconnected subgraphs, this may be due to them being a concatenation of a few distinctly generated subraphs, hence a GGM should be fit just to one subgraph (the largest - the rest are discarded for potentially being too small). All of our GGMs are capable of producing a bunch of disconnected subgraphs, however this is most likely to occur in our geometric GGMs which exhibit clustering; GIRGs do at least whp produce a unique giant component - one with a linear number of nodes. Hence for a fair comparison between $G$ and $G'$, we also need to post-process the GGM generated $G' \gets \shrinktogcc(G')$. 
+Blasius' rationale is that where some real graphs in our dataset have disconnected subgraphs, this may be due to them being a concatenation of a few distinctly generated subraphs, hence a GGM should be fit just to one subgraph (the largest - the rest are discarded for potentially being too small). All of our GGMs are capable of producing a bunch of disconnected subgraphs, however this is most likely to occur in our geometric GGMs which exhibit clustering; GIRGs do at least whp produce a unique giant component - one with a linear number of nodes. Hence for a fair comparison between $G$ and $G'$, we also need to post-process the GGM generated $G' \gets \shrinktogcc(G')$. 
 
 Blasius's only geometric model is Hyperbolic Random Graphs, for which they use a fitting algorithm that actually estimates a higher number of nodes $n > |V|$ in order to approximately have the largest connected component of $G' \sim \cG$ be of size $|V|$.
 We don't do this for our GIRGs however, as we find this algorithm prone to error, and unnecessary, at least for the socfb Facebook graphs - see \cref{tab:blasius_HRG_n_fitting_renunciation}. We accept instead that our GGMs may end up with slightly fewer nodes than the real graphs, and hope that this doesn't affect the SVM classification too much.
@@ -99,28 +99,28 @@ We don't do this for our GIRGs however, as we find this algorithm prone to error
 
 Restricting graphs to a connected component also has the added benefit of making some graph statistics more meaningful/sensical - for instance diameter and path lengths.
 
-% This explains why Blasius even further post-processes the GGM generated fake graphs to also restrict to their largest connected component.
-% Blasius goes as far as to, for the hyperbolic GGM, using a fitting algorithm that actually estimates a higher number of nodes $n > |V|$ in order to approximately have the largest connected component of $G' \sim \cG$ be of size $|V|$. We don't do this for our GIRGs however, as we find this algorithm prone to error, and unnecessary, at least for the socfb Facebook graphs.
+% This explains why Bl{\"a}sius even further post-processes the GGM generated fake graphs to also restrict to their largest connected component.
+% Bl{\"a}sius goes as far as to, for the hyperbolic GGM, using a fitting algorithm that actually estimates a higher number of nodes $n > |V|$ in order to approximately have the largest connected component of $G' \sim \cG$ be of size $|V|$. We don't do this for our GIRGs however, as we find this algorithm prone to error, and unnecessary, at least for the socfb Facebook graphs.
 
 \begin{table}[]
     \centering
     \begin{tabular}{|c|c|c|}
     \hline
     \textbf{graph name} & \textbf{GGM} & \textbf{nodes} \\ \hline
-    socfb-American75 & real-world & 6370 \\ \hline
+    \textcolor{ao(english)}{socfb-American75} & \textcolor{ao(english)}{real-world} & \textcolor{ao(english)}{6370} \\ \hline
     socfb-American75 & 1d-girg & 6370 \\ \hline
     socfb-American75 & 2d-girg & 6370 \\ \hline
     socfb-American75 & 3d-girg & 6370 \\ \hline
     socfb-American75 & ER & 6370 \\ \hline
     socfb-American75 & chung-lu & \textcolor{cyan}{6279} \\ \hline
-    socfb-American75 & hyperbolic & \textcolor{orange}{6583} \\ \hline
-    socfb-Amherst41 & real-world & 2235 \\ \hline
+    socfb-American75 & hyperbolic & \textcolor{fuchsia}{6583} \\ \hline
+    \textcolor{ao(english)}{socfb-Amherst41} & \textcolor{ao(english)}{real-world} & \textcolor{ao(english)}{2235} \\ \hline
     socfb-Amherst41 & 1d-girg & 2235 \\ \hline
     socfb-Amherst41 & 2d-girg & 2235 \\ \hline
     socfb-Amherst41 & 3d-girg & 2235 \\ \hline
     socfb-Amherst41 & ER & 2235 \\ \hline
     socfb-Amherst41 & chung-lu & \textcolor{cyan}{2221} \\ \hline
-    socfb-Amherst41 & hyperbolic & \textcolor{orange}{2282} \\ \hline
+    socfb-Amherst41 & hyperbolic & \textcolor{fuchsia}{2282} \\ \hline
     % \begin{comment}
     % socfb-Auburn71 & real-world & 18448 \\ \hline
     % socfb-Auburn71 & 1d-girg & 18448 \\ \hline
@@ -138,7 +138,7 @@ Restricting graphs to a connected component also has the added benefit of making
     % socfb-BC17 & hyperbolic & \textcolor{orange}{11824} \\ \hline
     % \end{comment}
     ... & ... & ... \\ \hline
-    bio-diseasome & real-world & 516 \\ \hline
+    \textcolor{ao(english)}{bio-diseasome} & \textcolor{ao(english)}{real-world} & \textcolor{ao(english)}{516} \\ \hline
     bio-diseasome & 1d-girg & \textcolor{cyan}{258} \\ \hline
     bio-diseasome & 2d-girg & \textcolor{cyan}{491} \\ \hline
     bio-diseasome & 3d-girg & \textcolor{cyan}{496} \\ \hline
@@ -150,7 +150,7 @@ Restricting graphs to a connected component also has the added benefit of making
     % For the socfb Facebook graphs, we see that the chung-lu model consistently has a very small number of nodes disconnected from the giant component, hence ending up with fewer nodes than the input (shrunk to GCC) real graph. 
     For the socfb Facebook graphs, the hyperbolic model consistently has a few more nodes than the input real graph due to its fitting algorithm not quite working perfectly (and stochasticity).
     On other real graphs there can be larger discrepancies, especially for smaller extra sparse graphs.
-    Numbers of nodes in the output (shrunk to GCC) graph are colored \textcolor{cyan}{cyan} if less than the real-world graph, and \textcolor{orange}{orange} if more (only possible in hyperbolic case).
+    Numbers of nodes in the output (shrunk to GCC) graph are colored \textcolor{cyan}{cyan} if less than the real-world graph, and \textcolor{fuchsia}{fuchsia} if more (only possible in hyperbolic case).
     }
     \label{tab:blasius_HRG_n_fitting_renunciation}
 \end{table}
@@ -227,10 +227,16 @@ Having fit $\tau$, we can then sample weights $w_u \sim \powerlaw(\tau)$.
 Generating weights $w_u \stackrel{iid}{\sim} \powerlaw(\tau)$ is fine as a model prior, however it's not a perfect fit to real-world data. This is particularly true as real graph degrees generally only follow a power law for large degrees; they might be better modelled by a GIRG with node weights with a power law tail (e.g. upper quartile of weights) and a different distribution for the rest of the weights. Most obviously, instead of having peak number of nodes with weight $w_u = x_{\min}$, the weight distribution might follow a more natural curve like in \cref{fig:natural_weight_distribution}.
 
 
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=\textwidth]{./figures/Distribution_of_Annual_Household_Income_in_the_United_States_2010.png}
+%     \caption{Example of a more real weight distribution which has a power law tail but not strictly powerlaw smaller weights.}
+%     \label{fig:natural_weight_distribution}
+% \end{figure}
 \begin{figure}
     \centering
-    \includegraphics[width=\textwidth]{./figures/Distribution_of_Annual_Household_Income_in_the_United_States_2010.png}
-    \caption{Example of a more natural weight distribution with a power law tail but not for smaller weights.}
+    \includegraphics[width=0.9\textwidth]{./figures/socfb-Bucknell39_3826_nodes_degree_dist_plot.png}
+    \caption{Example non-wholly power law degree distribution of socfb-Bucknell39 which has 3826 nodes. Power law tail has been fit for both the pdf and one minus the cdf, shown as the purple dashed line; $x_{\min}$ is the red vertical line. A completely power law distribution would just be a straight line on the log-log plot - we only have this in the tail.}
     \label{fig:natural_weight_distribution}
 \end{figure}
 
@@ -238,10 +244,10 @@ Generating weights $w_u \stackrel{iid}{\sim} \powerlaw(\tau)$ is fine as a model
 % A sequence of weights with a constant q-tile of largest weights fitting into $\tau$ powerlaw tramlines fits the general GIRG formulation, but could still look quite different based on the distribution of the smaller weights.
 
 An easy improvement to better fit a specific real graph is to take the sequence of node degrees as weights
-\footnote{these are now all positive integers $\geq 1$ as opposed to real numbers $\geq x_{\min}$, since in the largest connected componenet, minimum degree is 1}. Copying degrees as weights makes sense due to the Chung-Lu like property of having $E[d_u] \propto w_u$, whose correct scaling can be made correct by fitting $c$ as detailed in the next section. 
+\footnote{these are now all positive integers $\geq 1$ as opposed to real numbers $\geq x_{\min}$, since in the largest connected component, minimum degree is 1}. Copying degrees as weights makes sense due to the Chung-Lu like property of having $E[d_u] \propto w_u$, whose correct scaling can be made correct by fitting $c$ as detailed in the next section. 
 % For the GIRG model however there is the added complication of node locations, whereby a node might have a higher degree than expected for its weight $w_u$, by fortune of having many geometrically close nearby nodes $\vec{x}_v$.
 % This would clearly have better classification performance than power law generating weights.
-For the classification comparison framework, Blasius actually uses weight copying for fitting the Chung-Lu GGM, but not for the hyperbolic GGM (which is odd). This doesn't make a fair / like for like comparison, so we cover all bases by having both weight copied and power law fit GIRGs, as well as adding in a power law fit Chung-Lu. ER and BA GGMs are still just fit on the courser metric of overall graph average degree, as they have little ability to replicate a power law degree distribution.
+For the classification comparison framework, Bl{\"a}sius actually uses weight copying for fitting the Chung-Lu GGM, but not for the hyperbolic GGM (which is odd). This doesn't make a fair / like for like comparison, so we cover all bases by having both weight copied and power law fit GIRGs, as well as adding in a power law fit Chung-Lu. ER and BA GGMs are still just fit on the coarser metric of overall graph average degree, as they have little ability to replicate a power law degree distribution.
 
 Comparing weight copied Chung-Lu with weight copied GIRGs was additionally interesting for harder feature sets where other GGMs struggled to get below 98\% classification accuracy - having such high constrained numbers makes it harder to compare meaningfully between GGMs (drawing conclusions from 98\% vs 99\% is tough)
 
@@ -277,16 +283,19 @@ Hence for a GIRG, $ \E[dd(x)]  \propto x^{-\tau}$ for $x_\text{min} < x \in \N$,
 \subsection{Fitting $c$ and $\alpha$}
 \label{subsec:fitting_c_and_alpha}
 These are our last two GIRG parameters to fit.
-The parameter $c \in \R^+$ is most directly linked to the generated graph's average degree, whereas the parameter $\alpha \in (1, \infty]$ is more linked to the power of the geometry - larger $\alpha$ decreases the probability of longer distance edges which have $\rho_{uv} < 1$, leaving the edge set more dominated by shorter (and hence more geometric and clustered) edges. We therefore follow \cite{blasius2018towards} by fitting $\alpha$ with the clustering coefficient. Regrettably we used in our experiments the mean \textit{local clustering coefficient (LCC)} to fit our GIRGs and Hyperbolic Random Graphs, 
+The parameter $c \in \R^+$ is most directly linked to the generated graph's average degree, whereas the parameter $\alpha \in (1, \infty]$ is more linked to the power of the geometry - larger $\alpha$ decreases the probability of longer distance edges which have $\rho_{uv} < 1$, leaving the edge set more dominated by shorter (and hence more geometric and clustered) edges. We therefore follow \cite{blasius2018towards} by fitting $\alpha$ with the clustering coefficient. In our experiments we used the mean \textit{local clustering coefficient (LCC)} to fit our GIRGs and Hyperbolic Random Graphs, 
 \begin{equation}
     \mathrm{LCC}(G) := \frac{1}{|V|} \sum_{u \in V} 
     \frac{| \{ v, v' \in \Gamma(u): v \sim v'\} |}{{|\Gamma(u)| \choose 2}} \in [0, 1]
 \end{equation}
-instead of the global clustering coefficient as in \cite{blasius2018towards}. $\Gamma(u)$ is the set of neighbours of $u$, so LCC counts the fraction of pairs of neighbours of $u$ that possess the triangle completing third edge. The global clustering coefficient is the fraction of total \q{V} shapes that indeed are completed as full triangles and is likely a better metric than the LCC. Luckily in practice they generally differ by less than 1\%.
+% Oops! nk.globals.clustering which Blasius uses is actually just an approximation of the mean LCC. So we were mistaken.
+% instead of the global clustering coefficient as in \cite{blasius2018towards}.
+$\Gamma(u)$ is the set of neighbours of $u$, so LCC counts the fraction of pairs of neighbours of $u$ that possess the triangle completing third edge. The global clustering coefficient, the total fraction of total \q{V} shapes that indeed are completed as full triangles could be an alternative metric that is more stable across highly node heterogeneous graphs, but for GIRGs the mean LCC is more weighted towards lower degree, more highly clustered nodes which give a better geometric signal. In practice in our Facebook graphs, mean LCC and global clustering coefficient differ by less than $1\%$.
+% The global clustering coefficient is the fraction of total \q{V} shapes that indeed are completed as full triangles.  and is likely a better metric than the LCC. Luckily in practice they generally differ by less than 1\%.
 
 Unfortunately $c$ and $\alpha$ are not wholly independent, so we must fit them in tandem, fitting $c$ for a given $\alpha$ so as to match the average degree of $G$, and then $\alpha$ for that given $c$ to match the LCC of $G$. This then looks like coordinate ascent in 2D: we alternatingly set $c \gets \hat{c}_1;\; \alpha \gets \hat{\alpha}_1;\; c \gets \hat{c}_2;\; \alpha \gets \hat{\alpha}_2;\; ...$.
 
-Fitting $\alpha \gets \hat{\alpha}_i$ based on LCC is precisely ABC like - we propose potential $\alpha_i$ values, for which we generate a graph $G' \sim \cG_{\GIRG}(n, d, \hat{c}_i, \alpha_i, \tau)$, and use the distance metric $\delta(G, G') = |\mathrm{LCC}(G) - \mathrm{LCC}(G')|$ to both propose a next candidate $\alpha_i$ and eventually accept the final best $\hat{\alpha}_i$. Expected mean LCC is monotone in $\alpha$ so we know which direction to make a new proposal, and we follow \cite{blasius2018towards} in doing binary search in $\alpha^{-1}$ search space with starting bounds $[0. 1)$.
+Our procedure for fitting $\alpha \gets \hat{\alpha}_i$ based on LCC is somewhat ABC like - we propose potential $\alpha_i$ values, for which we generate a graph $G' \sim \cG_{\GIRG}(n, d, \hat{c}_i, \alpha_i, \tau)$, and use the distance metric $\delta(G, G') = |\mathrm{LCC}(G) - \mathrm{LCC}(G')|$ to both propose a next candidate $\alpha_i$ and eventually accept the final best $\hat{\alpha}_i$. Expected mean LCC is monotone in $\alpha$ so we know which direction to make a new proposal, and we follow \cite{blasius2018towards} in doing binary search in $\alpha^{-1}$ search space with starting bounds $[0. 1)$.
 
 \cite{blasius2022efficiently} luckily gives a more efficient method to fit $c$ given $\alpha, d$, and a pre-sampled set of weights $(w_u)_{u \in V}$, that doesn't involve fully sampling a new $G' \sim \cG_{\GIRG}$. They derive a formula for the expected average degree $\E[\overline{deg}(G')]$ of the GIRG which looks, emphasizing the dependence on $c$, like:
 \begin{equation}
@@ -298,7 +307,8 @@ Hence we just have to numerically solve \cref{eq:expected_edge_degree} for
     \hat{c}:\; \E[\overline{deg}(G') | \hat{c}] = \overline{deg}(G) = 2 |E|/|V|
 \end{equation} in order to obtain our desired average degree. Bl{\"a}sius provides C++ code for this, which finds $\hat{c}$ with a binary search.
 
-The expected average degree formula of \cref{eq:expected_edge_degree} miraculously holds for all volume based toroidal GIRGs (regardless of exact disance function $r(x_u, x_v) = r_{uv}$), and we can even adapt the formula to be independent of dimension $d$.
+The benefit of volume formulated GIRGs comes through as we can adapt the
+expected average degree formula of \cref{eq:expected_edge_degree} to hold for all volume based toroidal GIRGs (regardless of exact distance function $r(x_u, x_v) = r_{uv}$), and we can even adapt the formula to be independent of dimension $d$.
 
 \subsection{Volume formulation torus GIRG expected average degree formula}
 \label{subsec:average_degree_formula}
@@ -322,14 +332,15 @@ Given a fixed weight sequence $(w_u)_{u \in V}$ we will recover \cref{eq:expecte
     E[\overline{deg}(G') | c] = \frac{1}{n} \sum_{u \in V} \sum_{v \in V} E_r[p_{uv}(r)]
 \end{equation}
 % We'll derive the same resultant $p(u \sim v | w_u, w_v) = \E_r[p_{uv}(r)]$ regardless, relying only on the fact that $Vol(r)$ is an increasing function. Finally, $\E[d_u] = \sum_v p(u \sim v | w_u, w_v)$ and hence $\E[\overline{deg}] = \sum_u \E[d_u]$.
-Now $E_r[p_{uv}(r)] = \int_r p_{uv}(r) p(r) dr$. We'll break this down into $\int_{r: \rho_{uv} \geq 1} + \int_{r: \rho_{uv} < 1}$ (short edges and long edges, corresponding to edge probabilities being capped at 1, or strictly less than one for larger inter node distances) and write $\hat{r} : Vol(\hat{r}) = c^{1/\alpha} \left ( \frac{w_u w_v}{W} \right )$ as the boundary at which $\rho_{uv} = 1$.
-
-Hence we get
+Now $E_r[p_{uv}(r)] = \int_r p_{uv}(r) p(r) dr$. We will break the integral bounds into the region $r: \rho_{uv} \geq 1$ (the edge would be short), in which $p_{uv}(r)=1$, and the region $r: \rho_{uv} < 1$ (the edge would be long). Then writing $\hat{r} : Vol(\hat{r}) = c^{1/\alpha} \left ( \frac{w_u w_v}{W} \right )$ as the dividing boundary at which $\rho_{uv} = 1$ we hence get
+% into $\int_{r: \rho_{uv} \geq 1} + \int_{r: \rho_{uv} < 1}$ (short edges and long edges, corresponding to edge probabilities being capped at 1, or strictly less than one for larger inter node distances) and write $\hat{r} : Vol(\hat{r}) = c^{1/\alpha} \left ( \frac{w_u w_v}{W} \right )$ as the boundary at which $\rho_{uv} = 1$.
+% Hence we get
 \begin{equation}
     E_r[p_{uv}(r)] = \int_0^{\hat{r}} p(r) dr + \int_{\hat{r}}^{r_{\max}} p_{uv}(r) p(r) dr
 \end{equation}
 Substituting $Vol = Vol(r);\; dr = dVol \frac{dr}{dVol} = \frac{dVol}{p(r)}$, we get:
 \begin{align}
+    \label{eq:p_u_to_v_marginal_on_position}
     E_r[p_{uv}(r)] =& 
     \int_0^{Vol(\hat{r})} dVol + 
     \int_{Vol(\hat{r})}^{Vol(\mathbb{T})} p_{uv}(Vol) dVol
@@ -352,7 +363,6 @@ Substituting $Vol = Vol(r);\; dr = dVol \frac{dr}{dVol} = \frac{dVol}{p(r)}$, we
         \left [ 1 + \frac{1}{\alpha - 1} \right ] 
     - 
     \frac{c}{\alpha - 1} \left (\frac{w_u w_v}{W} \right )^\alpha
-    \label{eq:p_u_to_v_marginal_on_position}
 \end{align}
 where in the last two lines we sub in $Vol(\hat{r}) = c^{1/\alpha} \left (\frac{w_u w_v}{n} \right )$, and $Vol(\mathbb{T}) = 1$.
 I.e. across all GIRGs of different distance functions and dimensions $d$, we get the same resultant edge probabilities when marginalising out node locations. Note this is also $\Theta(\frac{w_u w_v}{W})$ since $\alpha > 1$, which shows the similarity between GIRGs and Chung-Lu!
@@ -366,7 +376,37 @@ To fit $c$ for a specific real graph $G$, for torus GIRGs we solved for the equa
 
 
 \section{Realism Framework Results}
-As introduced in \cref{sec:ggm_blasius_framework}, we fit a selection of GGMs, including various different kinds of GIRG on 104 socfb Facebook graphs, whose sizes range from $n=762$ to $n=35,111$ nodes. With each GGM we generated a mirrored dataset of fake graphs, with which we train a sequence of SVM classifiers to distinguish between the real and fake datasets, differing on which high level graph features they use as input. Classification accuracy using a particular GGM and feature set could be e.g. 100\% if the fake graphs are highly unrealistic in these features, or as good as 50\% if they're indistinguishable from the real graphs. Our results are shown in \cref{fig:blasius_framework_table} and \cref{fig:blasius_framework_means}, along with a \q{control} in \cref{fig:blasius_framework_means_1d_base} which classifies GGM fake datasets against the 1d max torus generated graphs instead of the real graphs. The numbers displayed in all three are actually the \textit{misclassifcation rate}, i.e. $1 - \text{accuracy}$, so that higher numbers mean more realistic GGM fit.
+As introduced in \cref{sec:ggm_blasius_framework}, we fit a selection of GGMs, including various different kinds of GIRG on 104 socfb Facebook graphs, whose sizes range from $n=762$ to $n=35,111$ nodes. The framework procedure is outlined in \cref{alg:Blasius_realism_framework} and described below; it is a bit involved.
+
+For each GGM we generated a mirrored dataset of fake graphs, with which we train a sequence of \textit{Gaussian radial basis function kernel SVM classifiers} to distinguish between the real and fake datasets, differing on which high level graph features they use as input.
+
+\textit{Classification accuracy} is the mean across a k-fold cross-validation of the real/fake dataset SVM test accuracies. This could be e.g. 100\% if the fake graphs are highly unrealistic in these features, or as good as 50\% if they're indistinguishable from the real graphs. Our results are shown in \cref{fig:blasius_framework_table} and \cref{fig:blasius_framework_means}, along with a \q{control} in \cref{fig:blasius_framework_means_1d_base} which classifies GGM fake datasets against the 1d max torus GIRG generated graphs instead of the real graphs. The numbers displayed in all three tables are actually the \textit{misclassifcation rate}, i.e. $1 - \text{accuracy}$, so that higher numbers mean a more realistic GGM fit.
+
+\begin{algorithm}
+    \caption{High level overview of Bl{\"a}sius' Realism Framework}
+    \label{alg:Blasius_realism_framework}
+    \begin{algorithmic}
+        \For{GGM $\cG$ in (various GIRGS, CL, ER, BA, HRG etc.)}
+            \For{graph $G_i$ in our real dataset of $N=104$ Facebook graphs}
+                \State Fit $\hat{\theta}$ for $\cG$ on $G_i$ (assuming that $G_i \sim \cG(\theta)$)
+                \State Sample a fake graph  $\widetilde{G}_i \sim \cG(\hat{\theta})$
+            \EndFor
+            \For{statistics set $\fclass$ in ("n, m, deg", "n, m, k-core", ...)}
+                \State Make dataset $D = \{\fclass(G_i), \text{real}\}_{i=1}^N \cup \{\fclass(\widetilde{G_i}), \text{fake}\}_{i=1}^N$
+                \State Split $D$ into k real/fake balanced cross-validation folds $D_1, ..., D_k$
+                \For{j=1,...,k}
+                    \State train SVM classifier $S_j$ on $D \setminus D_j$
+                    \State get classification accuracy $a_j$ of $S_j$ on test set $D_j$
+                \EndFor
+                \State Output \textit{misclassification rate} as $1 - \frac{1}{k} \sum_{j=1}^k a_j$
+            \EndFor
+
+        \EndFor
+    \end{algorithmic}
+\end{algorithm}
+
+
+
 
 In \cref{fig:blasius_framework_table} we present results of the harder classification test of using a whole distribution of node-level features. E.g. one node level property \q{deg}  actually means the inclusion of 5 features describing the distribution of node degrees: mean, median, lower quartile, upper quartile and standard deviation. In contrast the classification results in \cref{fig:blasius_framework_means} and \cref{fig:blasius_framework_means_1d_base} just use the mean node level features, which makes it easier to fool the classifier. Having more significantly higher than zero misclassification rate numbers in \cref{fig:blasius_framework_means} allows for more  meaningful comparisons between different GGMs and across a wider range of features.
 % Higher classification accuracies, e.g. $99\%$, denote that the GGM generates are readily distinguishable from the real graphs, and hence the GGM is a poor / unrealistic fit; $50\%$ accuracy is the gold standard of real/fake indistinguishability on the feature set.
@@ -388,11 +428,60 @@ In \cref{fig:blasius_framework_table} we present results of the harder classific
 We additionally added features that were not assessed in \cite{blasius2018towards}. Shown in \cref{fig:blasius_framework_table} are the non-node-level features \q{k-cores, comms}. These denote k-core sizes and community sizes (communities found using the Louvain method).
 However these can be rather high variance numbers. For example a 3000 node 2d max torus GIRG with average degree of 60 can end up with 40 k-cores and just 8 communities. This means that the community size distribution features would be the average size of these 8 communities, as well as lower, middle and upper quartile size and standard deviation of these sizes.
 
-Unfortunately, for community sizes, even Erdos-Renyi graphs have a misclassification rate comparable to the other GGMs, so this feature seems useless.
+Unfortunately, for community sizes, even Erd\H{o}s-Reny{\'i} graphs have a misclassification rate comparable to the other GGMs, so this feature seems useless.
 
-% \subsection{Analysis of Classification Results}
-% The framework of \cite{blasius2018towards} has its limitations, but we can draw some general conclusions.
 
+
+\begin{sidewaystable}
+    \centering
+    \includegraphics[width=\textwidth]{./figures/Blasius_framework_table.png}
+    \caption{GGM realism framework results on Facebook graphs, extended to different GIRG models. Shown here are distribution based features, i.e. including mean, median, lower quartile, upper quartile and standard deviation of node level features.
+    % If just one of mean/median is used, accuracies are often lower, sometimes even in $50\%-70\%$. $50\%$ is the best possible validation of a GGM as indistinguishable from real data, and is only achieved for feature set $n, m, LCC \;\text{mean}$ (by GIRGs and not the other none geometric GGMs).
+    Some models are excluded from the table e.g. 3d-6d GIRGs as their results follow a trend from low to high dimension.
+    }
+    \label{fig:blasius_framework_table}
+    % \end{subfigure}
+    \vspace{1em}
+    \centering
+    % \begin{subfigure}
+    \begin{tabular}{|c|c||c|c|}
+        \hline
+        1ccu & 1d copy-weight cube GIRG 
+        & betw & node betweenness centrality
+        \\
+        1-23 & $1 \lor (2 \land 3)$ mixed min/max GIRG
+        & k-core & node k-core number
+        \\
+        2m & $1 \lor 2$ 2d min GIRG
+        & close & node closeness centrality
+        \\
+        3cu & 3d cube GIRG
+        & LCC & node local clustering coefficient
+        \\
+        7d & 7d GIRG
+        & deg & node degree
+        \\
+        CL & Chung-Lu
+        & Katz & node Katz centrality
+        \\
+        CL-c & copy-weight Chung-Lu
+        & PR & node PageRank
+        \\
+        BA & Barabas{\'i}-Albert
+        & comms & community sizes
+        \\
+        ER & Erd\H{o}s-Reny{\'i}
+        & k-cores & k-core sizes
+        \\
+        hyper & Hyperbolic Random Graph &
+        diam & graph diameter
+        \\
+        && eff-diam & effective graph diameter\\
+        \hline
+    \end{tabular}
+    \caption{Graph Generative Model abbreviations; feature name abbreviations. Used in our results tables}
+% \end{subfigure}
+\end{sidewaystable}
 
 \subsection{Degree distribution features}
 % \subsubsection{Degree distribution features}
@@ -404,6 +493,15 @@ For this group of features we naturally observe much better performance for copy
 For just mean features in \cref{fig:blasius_framework_means}, there are many more non-zero rates for non-copy-weight GGMs, but generally worse numbers than the copy-weight GGMs. For whatever reason, non-copy-weight 3d cube GIRGs are much better on k-core ($16\%$) than all other GGMs, even copy-weight 3d cube GIRGs which get just $7\%$, and decently better on Katz centrality ($17\%$) than the other non-copy-weight GGMs.
 This could be due to a more realism of extreme nodes near the edge of the cube that both have a lowered degree, and neighbours which are also similarly low degree due to being extremely located.
 % The copy weight GGMs do get up to $47\%$ on Katz, however oddly copy weight cube GIRGs have just $7-9\%$ misclassification rate on k-core.
+
+
+\begin{sidewaystable}
+    \centering
+    \includegraphics[width=\textwidth]{./figures/blasius_framework_means.png}
+    \caption{GGM realism framework classification results on Facebook graphs, using just mean feature values as SVM classifier inputs}
+    \label{fig:blasius_framework_means}
+\end{sidewaystable}
+
 
 \subsection{Geometric Features}
 % \subsubsection{Geometric features}
@@ -436,13 +534,13 @@ Cube GIRGs generally underperform, except on effective diameter, where they shin
 
 \paragraph{Local Clustering Coefficient (LCC)} Due to their geometry, GIRGs exhibit significant clustering just like real graphs. We explicitly match for the mean LCC in our GIRG fitting procedure, so it's not surprising that the \q{n, m, LCC} row in \cref{fig:blasius_framework_means} has near-perfect performance for most GIRGs, whereas all other GGMs have a $0\%$ misclassification rate as they have tiny mean LCCs. This drops to $0\%$ for all GIRGs except copy-weight cube GIRGs when classifying based on LCC distribution. \cite{blasius2018towards} explained this by showing their fit hyperbolic graphs to have too low variance, which is likely the case for GIRGs here too.
 
-For mean LCC only 4d, 5d MCD GIRGs and 6d, 7d max GIRGs exhibit low misclassification rates, due to their inability to match the real graphs' high mean LCC. E.g. on socfb-Caltech36, the real graph has a mean LCC of $0.41$, however capping at $\alpha=100.0$ ($\alpha=\infty$ wouldn't improve the situation much either), the max norm 4d torus GIRG can only reach $0.33$, and the 5d GIRG just $0.24$. LCC is guaranteed to be non-tiny in GIRGs due to the triangle inequality: if $u \sim v_1$ and $u \sim v_2$ then likely $r(u, v_1), r(u, v_2)$ are both small, which makes $r(v_1, v_2) \leq r(u_, v_1) + r(u, v_2)$ also small. However for higher dimension GIRGs, $r(v_1, v_2)$ is more likely to be closer to this upper bound. LCC decays already for 4d MCD GIRGs as the MCD distance function isn't actually a metric so only obeys the triangle inequality stochastically (some percentage of the time. E.g. if $u$ is close to $v_1$ in dimension 1, and close to $v_2$ in dimension 2 then $v_1, v_2$ are generally not close to each other).
+For mean LCC only 4d, 5d MCD GIRGs and 6d, 7d max GIRGs exhibit low misclassification rates, due to their inability to match the real graphs' high mean LCC. E.g. on socfb-Caltech36, the real graph has a mean LCC of $0.41$, however capping at $\alpha=100.0$ ($\alpha=\infty$ wouldn't improve the situation much either), the max norm 4d torus GIRG can only reach $0.33$, and the 5d GIRG just $0.24$. LCC is guaranteed to be non-tiny in GIRGs due to the triangle inequality: if $u \sim v_1$ and $u \sim v_2$ then likely $r(u, v_1), r(u, v_2)$ are both small, which makes $r(v_1, v_2) \leq r(u_, v_1) + r(u, v_2)$ also small. However for higher dimension GIRGs, $r(v_1, v_2)$ is more likely to be closer to this upper bound. The relationship of LCC and dimension $d$ is shown in \cref{fig:LCC_vs_d}. Misclassification rates are poor already for 4d MCD GIRGs as the MCD distance function isn't actually a metric so only obeys the triangle inequality stochastically (some percentage of the time. E.g. if $u$ is close to $v_1$ in dimension 1, and close to $v_2$ in dimension 2 then $v_1, v_2$ are generally not close to each other).
 
 
 \begin{figure}
     \centering
-    \includegraphics[width=0.8\textwidth]{./figures/LCC_vs_d.png}
-    \caption{Increasing the dimension $d$ of a GIRG will decrease the mean LCC, but only up to a $\Theta(1)$ threshold due to the triangle inequality. Each point is one generated GIRG, all other parameters remaining fixed.}
+    \includegraphics[width=0.7\textwidth]{./figures/LCC_vs_d.png}
+    \caption{Increasing the dimension $d$ of a max torus GIRG, for fixed $n, c, \tau, \alpha$, decreasees the mean LCC, but only up to a $\Theta(1)$ threshold due to the triangle inequality. Each point shows the mean LCC of one GIRG generated graph.}
     \label{fig:LCC_vs_d}
 \end{figure}
 
@@ -457,7 +555,7 @@ For mean LCC only 4d, 5d MCD GIRGs and 6d, 7d max GIRGs exhibit low misclassific
 \subsection{Case study of distribution vs mean based classification: closeness centrality}
 % \subsubsection{Case study of distribution vs mean accuracy: closeness centrality}
 % \addtocounter{subsubsection}{1}
-In \cref{fig:blasius_framework_table} which provides feature distributions as input to the SVM classifier, it is disappointing that non copy-weight GIRGs show such poor performance, even on \q{geometric} features like closeness, betweenness and LCC (at least on closeness and betweenness they still recognizably outperform CL, BA and ER). E.g. 2d max torus GIRGs have a misclassification rate of just $1\%$ on \q{n, m, betw} and $2\%$ on \q{n, m, close}, compared to much better $38\%$ and $28\%$ on the mean based classifier equivalents. To explain this large disparity we do a case study on closeness, which happily also assuages some of our concerns.
+In \cref{fig:blasius_framework_table} which provides feature distributions as input to the SVM classifiers, it is notable that non- copy-weight GIRGs show poor performance, even on \q{geometric} features like closeness, betweenness and LCC (at least on closeness and betweenness they still recognizably outperform CL, BA and ER). E.g. 2d max torus GIRGs have a misclassification rate of just $1\%$ on \q{n, m, betw} and $2\%$ on \q{n, m, close}, compared to much better $38\%$ and $28\%$ on the mean based classifier equivalents. To explain this large disparity we do a case study on closeness, which happily also assuages some of our concerns.
 
 \cref{fig:real_2d_closeness_mean_scatter} shows that mean closeness aligns very accurately to the real graphs. Nonetheless, due to a consistently lower standard deviation of closeness in the GIRGs and the fact that the standard deviation of closeness in real graphs fits well as a function of number of nodes, the 2d GIRGs are distinguishable from real graphs on this feature set. We hence find the $2\%$ misclassification rate misleadingly low, and the GIRG's realism in closeness somewhat vindicated.
 
@@ -465,19 +563,19 @@ In \cref{fig:blasius_framework_table} which provides feature distributions as in
 
 \begin{figure}
     \centering
-    \begin{subfigure}{0.45\textwidth}
-    \includegraphics[width=\linewidth]{./figures/real_2d_closeness_mean_scatter.png}
-    \caption{2d GIRGs have almost identical mean node closeness to real-world FB graphs; $y=x$ line shown in blue.}
+    \begin{subfigure}{0.47\textwidth}
+    \includegraphics[width=\linewidth]{./figures/real_fake_closeness_mean.png}
+    \caption{2d GIRGs (y) have almost identical mean node closeness to real-world FB graphs (x); $y=x$ line shown in red.}
     \label{fig:real_2d_closeness_mean_scatter}
     \end{subfigure}
-    \begin{subfigure}{0.45\textwidth}
-    \includegraphics[width= \linewidth]{./figures/real_2d_closeness_std_scatter.png}
-    \caption{2d GIRGs have consistently lower standard deviation of node closeness than real-world FB graphs}
+    \begin{subfigure}{0.47\textwidth}
+    \includegraphics[width= \linewidth]{./figures/real_fake_closeness_std.png}
+    \caption{2d GIRGs (y) have consistently lower standard deviation of node closeness than real-world FB graphs (x).}
     \end{subfigure}
 
     \parbox[b]{.5\textwidth}{\Large
-    \includegraphics[width=0.9\linewidth]{./figures/real_closeness_std_against_n.png}
-    \subcaption{Standard deviation of node closeness in real-world FB graphs fits well as a function of number of nodes}
+    \includegraphics[width=0.9\linewidth]{./figures/real_fake_closeness_std_vs_number_of_nodes.png}
+    \subcaption{Standard deviation of node closeness in real-world FB graphs fits well as a function of number of nodes.}
     }
     \hspace{.05\textwidth}%
     \parbox[b]{.4\textwidth}{%
@@ -521,71 +619,16 @@ Classification accuracy is regrettably a crude metric. One limitation of this fr
 
 % 2+d min girgs we expect to have very large diameters.
 
-\subsection{SVM Classifier Misclassification Rates Tables}
 
-\begin{sidewaysfigure}
-    \centering
-    % \begin{subfigure}
-    \includegraphics[width=\textwidth]{./figures/Blasius_framework_table.png}
-    \caption{\cite{blasius2018towards} GGM realism framework results on Facebook graphs, extended to different GIRG models. Shown here are distribution based features, i.e. including mean, median, lower quartile, upper quartile and standard deviation of node level features.
-    % If just one of mean/median is used, accuracies are often lower, sometimes even in $50\%-70\%$. $50\%$ is the best possible validation of a GGM as indistinguishable from real data, and is only achieved for feature set $n, m, LCC \;\text{mean}$ (by GIRGs and not the other none geometric GGMs).
-    Some models are missing from the table e.g. 3d-6d GIRGs as their results follow a trend from low to high dimension.
-    }
-    \label{fig:blasius_framework_table}
-    % \end{subfigure}
-    \vspace{1em}
-    \centering
-    % \begin{subfigure}
-    \begin{tabular}{|c|c||c|c|}
-        \hline
-        1ccu & 1d copy-weight cube GIRG 
-        & betw & node betweenness centrality
-        \\
-        1-23 & $1 \lor (2 \land 3)$ mixed min/max GIRG
-        & k-core & node k-core number
-        \\
-        2m & $1 \lor 2$ 2d min GIRG
-        & close & node closeness centrality
-        \\
-        3cu & 3d cube GIRG
-        & LCC & node local clustering coefficient
-        \\
-        7d & 7d GIRG
-        & deg & node degree
-        \\
-        CL & Chung-Lu
-        & Katz & node Katz centrality
-        \\
-        CL-c & copy-weight Chung-Lu
-        & PR & node PageRank
-        \\
-        BA & Barabasi-Albert
-        & comms & community sizes
-        \\
-        ER & Erdos-Renyi
-        & k-cores & k-core sizes
-        \\
-        hyper & Hyperbolic Random Graph &
-        diam & graph diameter
-        \\
-        && eff-diam & effective graph diameter\\
-        \hline
-    \end{tabular}
-    \caption{Graph Generative Model abbreviations; feature name abbreviations. Used in our results tables}
-% \end{subfigure}
-\end{sidewaysfigure}
+\section{Conclusion}
+In conclusion, we evaluated GIRGs and other non-geometric GGMs for realism performance in replicating our dataset of $104$ local Facebook social networks. GIRGs perform similarly to other GGMs for some non-geometric features like degree distribution. GIRGs do significantly better than other GGMs on geometric features like closeness, betweenness and local clustering coefficient. Different GIRG variants shine in different features, with 1d max torus GIRGs simulating node betweenness centralities the best, while 1-23 and 1-234 mixed GIRGs and 2d, 3d min GIRGs doing best on closeness centrality. Cube GIRGs, especially 3d, have leading performance on effective graph diameter. 
 
-\begin{sidewaysfigure}
-    \centering
-    \includegraphics[width=\textwidth]{./figures/blasius_framework_means.png}
-    \caption{Blasius Framework classification results based on just mean feature values}
-    \label{fig:blasius_framework_means}
-\end{sidewaysfigure}
+The framework does have some limitations. Although we would often like to evaluate GGMs on harder distributional graph statistic data, even if they simulate quite well they can still get very low scores. This is exarcerbated by the fact that most GGMs suffer from quite tightly concentrated graph statistics and hence can struggle to match more heteregeneous real-world graphs, at least through the lens of the framework's classification accuracy.
 
 
-\begin{sidewaysfigure}
+\begin{sidewaystable}
     \centering
     \includegraphics[width=\textwidth]{./figures/blasius_framework_means_1d_base.png}
-    \caption{Blasius Framework classification results based on just mean feature values - \q{control} here by classification against the 1d max norm torus GIRG. I.e. all GGMs are still fit to the real graph (so for GIRGs mostly having matching mean node degre and mean LCC), but now the SVM is classifying each GGM against the 1d max norm torus GIRG instead of the real graph.}
+    \caption{GGM realism framework classification results, using just mean feature values as SVM classifier inputs - \q{control} here by classification against the 1d max norm torus GIRG. I.e. all GGMs are still fit to the real graph (so for GIRGs mostly having matching mean node degre and mean LCC), but now the SVM is classifying each GGM against the 1d max norm torus GIRG instead of the real graph.}
     \label{fig:blasius_framework_means_1d_base}
-\end{sidewaysfigure}
+\end{sidewaystable}
